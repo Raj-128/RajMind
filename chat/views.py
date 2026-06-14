@@ -10,6 +10,8 @@ from .serializers import (
     AskQuestionSerializer,
     MessageSerializer
 )
+import time
+from analytics_app.models import SearchAnalytics
 from .ai_engine import generate_answer
 from workspaces.models import Workspace, WorkspaceMember
 
@@ -89,7 +91,9 @@ class AskQuestionView(APIView):
         )
 
         # Generate AI answer
+        start_time = time.time()
         result = generate_answer(workspace_id, question, history)
+        elapsed_time = time.time() - start_time
 
         # Save assistant message
         assistant_message = Message.objects.create(
@@ -97,6 +101,15 @@ class AskQuestionView(APIView):
             role='assistant',
             content=result['answer'],
             sources=result['sources']
+        )
+
+        # Log analytics
+        SearchAnalytics.objects.create(
+            workspace=workspace,
+            user=request.user,
+            query=question,
+            response_time=elapsed_time,
+            sources_count=len(result['sources'])
         )
 
         return Response({

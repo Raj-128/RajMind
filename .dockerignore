@@ -1,0 +1,10 @@
+env/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+media/
+staticfiles/
+chromadb_store/
+db.sqlite3
+.vscode/
