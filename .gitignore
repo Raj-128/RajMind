@@ -7,3 +7,4 @@ media/
 staticfiles/
 .vscode/
 *.log
+chromadb_store/

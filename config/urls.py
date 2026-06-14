@@ -23,4 +23,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
     path('api/workspaces/', include('workspaces.urls')),
+    path('api/workspaces/<int:workspace_id>/documents/', include('documents.urls')),
+    path('api/workspaces/<int:workspace_id>/chat/', include('chat.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
