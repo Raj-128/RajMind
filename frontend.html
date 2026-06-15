@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title> RajMind — Knowledge Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14171f;
+    --ink-2:#1b1f29;
+    --ink-3:#272c39;
+    --line: rgba(255,255,255,0.07);
+    --parchment:#f3ebd8;
+    --parchment-ink:#2b2620;
+    --gold:#d7a552;
+    --gold-soft: rgba(215,165,82,0.16);
+    --text:#eae7e1;
+    --muted:#8b91a3;
+    --sage:#7db89a;
+    --terracotta:#d9786e;
+    --radius: 10px;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--ink);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  h1,h2,h3,.display{ font-family:'Fraunces', serif; }
+
+  a{ color: var(--gold); text-decoration:none; }
+
+  /* ---------- Scaffolding ---------- */
+  .app{ display:none; min-height:100vh; }
+  .app.active{ display:flex; }
+
+  .topbar{
+    position:fixed; top:0; left:0; right:0; height:60px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 24px; background: var(--ink-2); border-bottom:1px solid var(--line);
+    z-index:20;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:28px; height:28px; border-radius:6px; background: var(--gold);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--ink); font-family:'Fraunces', serif; font-weight:700; font-size:16px;
+  }
+  .brand-name{ font-family:'Fraunces', serif; font-size:18px; letter-spacing:0.02em; }
+
+  .topbar-right{ display:flex; align-items:center; gap:14px; }
+  .workspace-pill{
+    display:flex; align-items:center; gap:8px;
+    background: var(--ink-3); border:1px solid var(--line); border-radius:999px;
+    padding:6px 14px; font-size:13px; color: var(--muted);
+  }
+  .workspace-pill select{
+    background:transparent; border:none; color: var(--text); font-size:13px;
+    font-family:'Inter',sans-serif; outline:none; max-width:160px;
+  }
+  .workspace-pill select option{ background: var(--ink-2); color: var(--text); }
+
+  .user-chip{ font-size:13px; color: var(--muted); }
+  .btn-ghost{
+    background:transparent; border:1px solid var(--line); color: var(--text);
+    padding:6px 14px; border-radius:999px; font-size:13px; cursor:pointer;
+    font-family:'Inter',sans-serif; transition: border-color .15s, color .15s;
+  }
+  .btn-ghost:hover{ border-color: var(--gold); color: var(--gold); }
+
+  /* ---------- Sidebar ---------- */
+  .layout{ display:flex; width:100%; padding-top:60px; }
+  .sidebar{
+    width:220px; flex-shrink:0; padding:24px 14px;
+    border-right:1px solid var(--line); position:fixed; top:60px; bottom:0; left:0;
+    background: var(--ink-2);
+    overflow-y:auto;
+  }
+  .nav-eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.12em;
+    color: var(--muted); text-transform:uppercase; padding:0 12px 8px;
+  }
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    border-radius: var(--radius); color: var(--muted); font-size:14px;
+    cursor:pointer; transition: background .15s, color .15s; margin-bottom:2px;
+  }
+  .nav-item:hover{ background: var(--ink-3); color: var(--text); }
+  .nav-item.active{ background: var(--gold-soft); color: var(--gold); }
+  .nav-icon{ width:18px; text-align:center; font-size:15px; }
+
+  .main{ flex:1; margin-left:220px; padding:32px 36px 80px; max-width:880px; }
+  .main.wide{ max-width:1040px; }
+
+  .view{ display:none; }
+  .view.active{ display:block; animation: fadeUp .35s ease; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
+
+  .view-header{ margin-bottom: 28px; }
+  .view-eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.14em;
+    color: var(--gold); text-transform:uppercase; margin-bottom:6px;
+  }
+  .view-title{ font-size: 28px; font-weight:600; margin:0; }
+  .view-sub{ color: var(--muted); font-size:14px; margin-top:6px; max-width:520px; }
+
+  /* ---------- Cards / Panels ---------- */
+  .panel{
+    background: var(--ink-2); border:1px solid var(--line); border-radius: 14px;
+    padding:20px 22px; margin-bottom:18px;
+  }
+  .panel-title{ font-size:15px; font-weight:600; margin:0 0 14px; }
+
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; color: var(--muted); margin-bottom:6px; }
+  .field input, .field select{
+    width:100%; background: var(--ink-3); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; color: var(--text); font-size:14px; font-family:'Inter',sans-serif;
+    outline:none; transition: border-color .15s;
+  }
+  .field input:focus, .field select:focus{ border-color: var(--gold); }
+
+  .btn{
+    background: var(--gold); color: var(--ink); border:none; border-radius:8px;
+    padding:10px 20px; font-size:14px; font-weight:600; cursor:pointer;
+    font-family:'Inter',sans-serif; transition: transform .12s, box-shadow .12s;
+  }
+  .btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 14px rgba(215,165,82,0.25); }
+  .btn:active{ transform: translateY(0); }
+  .btn:disabled{ opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
+  .btn-secondary{
+    background:transparent; border:1px solid var(--line); color: var(--text);
+  }
+  .btn-secondary:hover{ border-color: var(--gold); color: var(--gold); box-shadow:none; }
+
+  .error-msg{ color: var(--terracotta); font-size:13px; margin-top:8px; }
+  .hint{ color: var(--muted); font-size:12px; margin-top:6px; }
+
+  /* ---------- Auth screen ---------- */
+  .auth-wrap{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .auth-grid{
+    display:grid; grid-template-columns: 1.1fr 1fr; gap:60px; max-width:980px; width:100%; align-items:center;
+  }
+  .hero-eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.18em;
+    color: var(--gold); text-transform:uppercase; margin-bottom:18px;
+    animation: fadeUp .5s ease;
+  }
+  .hero-title{
+    font-size:52px; line-height:1.08; font-weight:600; margin:0 0 18px;
+    animation: fadeUp .6s ease;
+  }
+  .hero-title em{ color: var(--gold); font-style:italic; }
+  .hero-desc{
+    color: var(--muted); font-size:15px; line-height:1.7; max-width:420px;
+    animation: fadeUp .7s ease;
+  }
+  .hero-stack{ margin-top:34px; display:flex; gap:10px; flex-wrap:wrap; animation: fadeUp .8s ease; }
+  .stack-tag{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--muted);
+    border:1px solid var(--line); border-radius:999px; padding:5px 12px;
+  }
+
+  .auth-card{
+    background: var(--ink-2); border:1px solid var(--line); border-radius:16px;
+    padding:32px; animation: fadeUp .5s ease;
+  }
+  .tabs{ display:flex; gap:4px; background: var(--ink-3); border-radius:10px; padding:4px; margin-bottom:22px; }
+  .tab{
+    flex:1; text-align:center; padding:8px 0; border-radius:8px; font-size:13px;
+    color: var(--muted); cursor:pointer; transition: background .15s, color .15s;
+  }
+  .tab.active{ background: var(--gold); color: var(--ink); font-weight:600; }
+
+  .auth-form{ display:none; }
+  .auth-form.active{ display:block; }
+
+  /* ---------- Documents ---------- */
+  .doc-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 0; border-bottom:1px solid var(--line);
+  }
+  .doc-row:last-child{ border-bottom:none; }
+  .doc-meta{ display:flex; align-items:center; gap:14px; }
+  .doc-icon{
+    width:38px; height:38px; border-radius:8px; background: var(--ink-3);
+    display:flex; align-items:center; justify-content:center; font-size:16px; color: var(--gold);
+  }
+  .doc-name{ font-size:14px; font-weight:500; }
+  .doc-sub{ font-size:12px; color: var(--muted); margin-top:2px; }
+  .badge{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase;
+    letter-spacing:0.06em; padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+  }
+  .badge-pending{ color:var(--gold); border-color: var(--gold-soft); background: var(--gold-soft); }
+  .badge-processing{ color:var(--gold); border-color: var(--gold-soft); background: var(--gold-soft); }
+  .badge-completed{ color:var(--sage); border-color: rgba(125,184,154,0.18); background: rgba(125,184,154,0.1); }
+  .badge-failed{ color:var(--terracotta); border-color: rgba(217,120,110,0.18); background: rgba(217,120,110,0.1); }
+
+  .upload-zone{
+    border:1.5px dashed var(--line); border-radius:12px; padding:26px;
+    text-align:center; color: var(--muted); font-size:13px; margin-bottom:8px;
+    transition: border-color .15s, color .15s; cursor:pointer;
+  }
+  .upload-zone:hover, .upload-zone.drag{ border-color: var(--gold); color: var(--gold); }
+  .upload-zone input{ display:none; }
+
+  /* ---------- Chat / Ask ---------- */
+  .chat-thread{ display:flex; flex-direction:column; gap:16px; margin-bottom:18px; }
+  .msg{ max-width:80%; }
+  .msg-user{ align-self:flex-end; }
+  .msg-assistant{ align-self:flex-start; }
+  .msg-bubble{
+    padding:13px 16px; border-radius:12px; font-size:14px; line-height:1.6;
+  }
+  .msg-user .msg-bubble{ background: var(--gold-soft); color: var(--text); border:1px solid var(--gold-soft); }
+  .msg-assistant .msg-bubble{ background: var(--ink-3); border:1px solid var(--line); }
+  .msg-label{
+    font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:0.12em;
+    text-transform:uppercase; color: var(--muted); margin-bottom:6px;
+  }
+
+  .citation-row{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .citation-chip{
+    display:flex; align-items:center; gap:6px; cursor:pointer;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--ink);
+    background: var(--parchment); border-radius:999px; padding:5px 12px;
+    transition: transform .12s;
+  }
+  .citation-chip:hover{ transform: translateY(-1px); }
+  .citation-chip .num{
+    background: var(--gold); color: var(--ink); border-radius:50%;
+    width:16px; height:16px; display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700;
+  }
+
+  .ask-bar{ display:flex; gap:10px; }
+  .ask-bar input{ flex:1; }
+
+  .empty{
+    text-align:center; color: var(--muted); font-size:13px; padding:40px 0;
+  }
+
+  /* ---------- Citation drawer ---------- */
+  .drawer-backdrop{
+    position:fixed; inset:0; background: rgba(0,0,0,0.4);
+    opacity:0; pointer-events:none; transition: opacity .2s; z-index:30;
+  }
+  .drawer-backdrop.open{ opacity:1; pointer-events:auto; }
+
+  .drawer{
+    position:fixed; top:0; right:0; bottom:0; width:340px;
+    background: var(--parchment); color: var(--parchment-ink);
+    transform: translateX(100%); transition: transform .28s ease; z-index:31;
+    padding:28px 26px; overflow-y:auto;
+    box-shadow: -10px 0 30px rgba(0,0,0,0.3);
+  }
+  .drawer.open{ transform: translateX(0); }
+  .drawer-eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.14em;
+    text-transform:uppercase; color:#9c7a3a; margin-bottom:14px;
+  }
+  .drawer-close{
+    position:absolute; top:22px; right:22px; background:none; border:none;
+    font-size:18px; color:#9c7a3a; cursor:pointer;
+  }
+  .drawer-card{
+    border:1px solid rgba(43,38,32,0.15); border-radius:10px; padding:16px;
+    margin-bottom:14px; background: rgba(255,255,255,0.4);
+  }
+  .drawer-card-title{ font-family:'Fraunces', serif; font-size:17px; margin:0 0 6px; }
+  .drawer-card-meta{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:#8a7350;
+    text-transform:uppercase; letter-spacing:0.06em;
+  }
+  .drawer-card-index{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; border-radius:50%; background:#2b2620; color: var(--parchment);
+    font-size:11px; font-weight:700; margin-right:8px; font-family:'IBM Plex Mono', monospace;
+  }
+
+  /* ---------- Analytics ---------- */
+  .stat-grid{ display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; margin-bottom:20px; }
+  .stat-card{
+    background: var(--ink-2); border:1px solid var(--line); border-radius:14px;
+    padding:18px 20px;
+  }
+  .stat-value{ font-family:'Fraunces', serif; font-size:30px; font-weight:600; color: var(--gold); }
+  .stat-label{ font-size:12px; color: var(--muted); margin-top:4px; }
+
+  .table{ width:100%; border-collapse: collapse; font-size:13px; }
+  .table th{
+    text-align:left; font-family:'IBM Plex Mono', monospace; font-size:10px;
+    text-transform:uppercase; letter-spacing:0.08em; color: var(--muted);
+    padding:10px 0; border-bottom:1px solid var(--line);
+  }
+  .table td{ padding:12px 0; border-bottom:1px solid var(--line); }
+  .table tr:last-child td{ border-bottom:none; }
+
+  /* ---------- Members ---------- */
+  .member-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 0; border-bottom:1px solid var(--line);
+  }
+  .member-row:last-child{ border-bottom:none; }
+  .role-tag{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase;
+    color: var(--gold); background: var(--gold-soft); border-radius:999px; padding:3px 10px;
+  }
+
+  .inline-form{ display:flex; gap:10px; align-items:flex-end; }
+  .inline-form .field{ flex:1; margin-bottom:0; }
+
+  @media (max-width: 860px){
+    .auth-grid{ grid-template-columns:1fr; }
+    .hero-title{ font-size:36px; }
+    .sidebar{ display:none; }
+    .main{ margin-left:0; padding:24px 16px 80px; }
+    .stat-grid{ grid-template-columns: repeat(2,1fr); }
+    .drawer{ width:88%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= AUTH VIEW ================= -->
+<div id="authView" class="auth-wrap">
+  <div class="auth-grid">
+    <div>
+      <div class="hero-eyebrow">Enterprise Knowledge Assistant</div>
+      <h1 class="hero-title">Every answer<br><em>footnoted</em> back<br>to its source.</h1>
+      <p class="hero-desc">
+        Upload your team's documents. Ask questions in plain language.
+        RajMind retrieves the exact passages behind every answer —
+        so nothing the assistant says is unattributed.
+      </p>
+      <div class="hero-stack">
+        <span class="stack-tag">RAG · vector search</span>
+        <span class="stack-tag">Workspaces · RBAC</span>
+        <span class="stack-tag">Async via Celery</span>
+        <span class="stack-tag">Cited responses</span>
+      </div>
+    </div>
+
+    <div class="auth-card">
+      <div class="tabs">
+        <div class="tab active" data-tab="login">Sign in</div>
+        <div class="tab" data-tab="register">Create account</div>
+      </div>
+
+      <form id="loginForm" class="auth-form active">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="loginEmail" required placeholder="you@company.com">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••">
+        </div>
+        <button class="btn" type="submit" style="width:100%">Sign in</button>
+        <div class="error-msg" id="loginError"></div>
+      </form>
+
+      <form id="registerForm" class="auth-form">
+        <div class="field">
+          <label>Full name</label>
+          <input type="text" id="regFullName" required placeholder="Jane Doe">
+        </div>
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="regUsername" required placeholder="janedoe">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="regEmail" required placeholder="you@company.com">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="regPassword" required placeholder="••••••••">
+        </div>
+        <div class="field">
+          <label>Confirm password</label>
+          <input type="password" id="regPassword2" required placeholder="••••••••">
+        </div>
+        <button class="btn" type="submit" style="width:100%">Create account</button>
+        <div class="error-msg" id="registerError"></div>
+      </form>
+
+      <div class="hint" style="margin-top:16px">
+        API endpoint:
+        <input id="apiBase" class="mono" value="http://127.0.0.1:8000/api"
+          style="background:var(--ink-3); border:1px solid var(--line); color:var(--text);
+                 border-radius:6px; padding:4px 8px; font-size:11px; width:200px; margin-left:6px;">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP VIEW ================= -->
+<div id="appView" class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">R</div>
+      <div class="brand-name">RajMind</div>
+    </div>
+    <div class="topbar-right">
+      <div class="workspace-pill">
+        <span>Workspace</span>
+        <select id="workspaceSelect"></select>
+      </div>
+      <button class="btn-ghost" id="newWorkspaceBtn">+ New workspace</button>
+      <span class="user-chip" id="userChip"></span>
+      <button class="btn-ghost" id="logoutBtn">Sign out</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+      <div class="nav-eyebrow">Workspace</div>
+      <div class="nav-item active" data-view="ask"><span class="nav-icon">✦</span> Ask</div>
+      <div class="nav-item" data-view="documents"><span class="nav-icon">▤</span> Documents</div>
+      <div class="nav-item" data-view="members"><span class="nav-icon">◈</span> Members</div>
+      <div class="nav-item" data-view="activity"><span class="nav-icon">▱</span> Activity</div>
+    </div>
+
+    <div class="main wide">
+
+      <!-- ASK VIEW -->
+      <div class="view active" id="view-ask">
+        <div class="view-header">
+          <div class="view-eyebrow">Reading room</div>
+          <h2 class="view-title">Ask the workspace</h2>
+          <p class="view-sub">Questions are answered using the documents uploaded to this workspace, with citations to the exact source.</p>
+        </div>
+
+        <div class="chat-thread" id="chatThread">
+          <div class="empty" id="chatEmpty">No questions yet — ask something about your uploaded documents.</div>
+        </div>
+
+        <div class="ask-bar">
+          <input type="text" id="askInput" placeholder="e.g. What does this document say about onboarding?">
+          <button class="btn" id="askBtn">Ask</button>
+        </div>
+      </div>
+
+      <!-- DOCUMENTS VIEW -->
+      <div class="view" id="view-documents">
+        <div class="view-header">
+          <div class="view-eyebrow">The stacks</div>
+          <h2 class="view-title">Documents</h2>
+          <p class="view-sub">Upload PDFs, Word documents, or text files. Each one is chunked, embedded, and indexed automatically in the background.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Upload a document</div>
+          <div class="field">
+            <label>Title</label>
+            <input type="text" id="docTitle" placeholder="e.g. Employee Handbook 2026">
+          </div>
+          <label class="upload-zone" id="uploadZone">
+            <input type="file" id="docFile" accept=".pdf,.doc,.docx,.txt">
+            <span id="uploadZoneText">Click to choose a PDF, DOCX, or TXT file</span>
+          </label>
+          <button class="btn" id="uploadBtn" style="margin-top:10px">Upload</button>
+          <div class="error-msg" id="uploadError"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Indexed documents</div>
+          <div id="docList"></div>
+        </div>
+      </div>
+
+      <!-- MEMBERS VIEW -->
+      <div class="view" id="view-members">
+        <div class="view-header">
+          <div class="view-eyebrow">Roster</div>
+          <h2 class="view-title">Members</h2>
+          <p class="view-sub">Invite teammates to this workspace and set what they can do.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Invite a member</div>
+          <div class="inline-form">
+            <div class="field">
+              <label>Email</label>
+              <input type="email" id="inviteEmail" placeholder="teammate@company.com">
+            </div>
+            <div class="field" style="max-width:160px">
+              <label>Role</label>
+              <select id="inviteRole">
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </div>
+            <button class="btn" id="inviteBtn">Add</button>
+          </div>
+          <div class="error-msg" id="inviteError"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Current members</div>
+          <div id="memberList"></div>
+        </div>
+      </div>
+
+      <!-- ACTIVITY VIEW -->
+      <div class="view" id="view-activity">
+        <div class="view-header">
+          <div class="view-eyebrow">Ledger</div>
+          <h2 class="view-title">Activity</h2>
+          <p class="view-sub">How this workspace is using the assistant.</p>
+        </div>
+
+        <div class="stat-grid" id="statGrid"></div>
+
+        <div class="panel">
+          <div class="panel-title">Recent questions</div>
+          <table class="table">
+            <thead>
+              <tr><th>Query</th><th>Asked by</th><th>Sources</th><th>Response time</th></tr>
+            </thead>
+            <tbody id="activityTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ================= CITATION DRAWER ================= -->
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<div class="drawer" id="citationDrawer">
+  <button class="drawer-close" id="drawerClose">✕ Close</button>
+  <div class="drawer-eyebrow">Cited sources</div>
+  <div id="drawerContent"></div>
+</div>
+
+<script>
+(() => {
+  const state = {
+    token: null,
+    user: null,
+    workspaces: [],
+    activeWorkspace: null,
+  };
+  const savedToken = localStorage.getItem("token");
+  const savedUser = localStorage.getItem("user");
+
+if(savedToken){
+    state.token = savedToken;
+}
+
+if(savedUser){
+    state.user = JSON.parse(savedUser);
+}
+  const $ = (id) => document.getElementById(id);
+  const apiBase = () => $('apiBase').value.replace(/\/$/, '');
+
+  async function api(path, opts = {}) {
+    const headers = opts.headers || {};
+    if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+    if (!(opts.body instanceof FormData) && opts.body) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const res = await fetch(apiBase() + path, { ...opts, headers });
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) throw { status: res.status, data };
+    return data;
+  }
+
+  /* ---------------- AUTH ---------------- */
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+      tab.classList.add('active');
+      $(tab.dataset.tab + 'Form').classList.add('active');
+    });
+  });
+
+  $('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('loginError').textContent = '';
+    try {
+      const data = await api('/auth/login/', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: $('loginEmail').value,
+          password: $('loginPassword').value,
+        }),
+      });
+      state.token = data.access;
+      localStorage.setItem("token", data.access);
+      state.user = { email: $('loginEmail').value };
+      localStorage.setItem(
+    "user",
+    JSON.stringify({ email: $('loginEmail').value })
+);
+      await enterApp();
+    } catch (err) {
+      $('loginError').textContent = 'Sign in failed. Check your email and password.';
+    }
+  });
+
+  $('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('registerError').textContent = '';
+    const pw = $('regPassword').value, pw2 = $('regPassword2').value;
+    if (pw !== pw2) { $('registerError').textContent = 'Passwords do not match.'; return; }
+    try {
+      const data = await api('/auth/register/', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: $('regEmail').value,
+          username: $('regUsername').value,
+          full_name: $('regFullName').value,
+          password: pw, password2: pw2,
+        }),
+      });
+      state.token = data.tokens.access;
+      state.user = data.user;
+      await enterApp();
+    } catch (err) {
+      const msg = err.data ? JSON.stringify(err.data) : 'Registration failed.';
+      $('registerError').textContent = msg;
+    }
+  });
+
+  $('logoutBtn').addEventListener('click', () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    
+    state.token = null; state.user = null; state.workspaces = []; state.activeWorkspace = null;
+    $('appView').classList.remove('active');
+    $('authView').style.display = 'flex';
+  });
+
+  /* ---------------- ENTER APP ---------------- */
+  async function enterApp() {
+    $('authView').style.display = 'none';
+    $('appView').classList.add('active');
+    $('userChip').textContent = state.user.email || '';
+    await loadWorkspaces();
+  }
+
+  async function loadWorkspaces() {
+    state.workspaces = await api('/workspaces/');
+    const sel = $('workspaceSelect');
+    sel.innerHTML = '';
+    if (state.workspaces.length === 0) {
+      sel.innerHTML = '<option>No workspaces yet</option>';
+      return;
+    }
+    state.workspaces.forEach(w => {
+      const opt = document.createElement('option');
+      opt.value = w.id; opt.textContent = w.name;
+      sel.appendChild(opt);
+    });
+    state.activeWorkspace = state.workspaces[0].id;
+    sel.value = state.activeWorkspace;
+    await refreshAll();
+  }
+
+  $('workspaceSelect').addEventListener('change', async (e) => {
+    state.activeWorkspace = e.target.value;
+    await refreshAll();
+  });
+
+  $('newWorkspaceBtn').addEventListener('click', async () => {
+    const name = prompt('Workspace name:');
+    if (!name) return;
+    await api('/workspaces/', { method: 'POST', body: JSON.stringify({ name }) });
+    await loadWorkspaces();
+  });
+
+  async function refreshAll() {
+    await Promise.all([loadDocuments(), loadMembers(), loadActivity()]);
+    clearChat();
+  }
+
+  /* ---------------- NAVIGATION ---------------- */
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      item.classList.add('active');
+      $('view-' + item.dataset.view).classList.add('active');
+    });
+  });
+
+  /* ---------------- DOCUMENTS ---------------- */
+  $('docFile').addEventListener('change', () => {
+    const f = $('docFile').files[0];
+    $('uploadZoneText').textContent = f ? f.name : 'Click to choose a PDF, DOCX, or TXT file';
+  });
+
+  $('uploadBtn').addEventListener('click', async () => {
+    $('uploadError').textContent = '';
+    const file = $('docFile').files[0];
+    const title = $('docTitle').value || (file ? file.name : '');
+    if (!file) { $('uploadError').textContent = 'Choose a file first.'; return; }
+    const fd = new FormData();
+    fd.append('title', title);
+    fd.append('file', file);
+    try {
+      await api(`/workspaces/${state.activeWorkspace}/documents/`, { method: 'POST', body: fd });
+      $('docTitle').value = '';
+      $('docFile').value = '';
+      $('uploadZoneText').textContent = 'Click to choose a PDF, DOCX, or TXT file';
+      await loadDocuments();
+      pollDocuments();
+    } catch (err) {
+      $('uploadError').textContent = 'Upload failed. Check the file type and size.';
+    }
+  });
+
+  async function loadDocuments() {
+    const docs = await api(`/workspaces/${state.activeWorkspace}/documents/`);
+    renderDocuments(docs);
+    return docs;
+  }
+
+  function renderDocuments(docs) {
+    const list = $('docList');
+    if (!docs.length) { list.innerHTML = '<div class="empty">No documents uploaded yet.</div>'; return; }
+    list.innerHTML = docs.map(d => `
+      <div class="doc-row">
+        <div class="doc-meta">
+          <div class="doc-icon">${iconFor(d.file_type)}</div>
+          <div>
+            <div class="doc-name">${escapeHtml(d.title)}</div>
+            <div class="doc-sub mono">${d.file_type.toUpperCase()} · uploaded ${formatDate(d.created_at)}</div>
+          </div>
+        </div>
+        <span class="badge badge-${d.status}">${d.status}</span>
+      </div>
+    `).join('');
+  }
+
+  function iconFor(type) {
+    if (type === 'pdf') return '◆';
+    if (type === 'docx') return '▣';
+    return '▢';
+  }
+
+  function pollDocuments(attempts = 10) {
+    if (attempts <= 0) return;
+    setTimeout(async () => {
+      const docs = await loadDocuments();
+      const stillPending = docs.some(d => d.status === 'pending' || d.status === 'processing');
+      if (stillPending) pollDocuments(attempts - 1);
+    }, 3000);
+  }
+
+  /* ---------------- MEMBERS ---------------- */
+  $('inviteBtn').addEventListener('click', async () => {
+    $('inviteError').textContent = '';
+    const email = $('inviteEmail').value;
+    const role = $('inviteRole').value;
+    if (!email) return;
+    try {
+      await api(`/workspaces/${state.activeWorkspace}/members/add/`, {
+        method: 'POST', body: JSON.stringify({ email, role }),
+      });
+      $('inviteEmail').value = '';
+      await loadMembers();
+    } catch (err) {
+      const msg = (err.data && err.data.error) ? err.data.error : 'Could not add member.';
+      $('inviteError').textContent = msg;
+    }
+  });
+
+  async function loadMembers() {
+    const members = await api(`/workspaces/${state.activeWorkspace}/members/`);
+    const list = $('memberList');
+    if (!members.length) { list.innerHTML = '<div class="empty">No members yet.</div>'; return; }
+    list.innerHTML = members.map(m => `
+      <div class="member-row">
+        <div>
+          <div class="doc-name">${escapeHtml(m.user_full_name || m.user_email)}</div>
+          <div class="doc-sub">${escapeHtml(m.user_email)}</div>
+        </div>
+        <span class="role-tag">${m.role}</span>
+      </div>
+    `).join('');
+  }
+
+  /* ---------------- ASK / CHAT ---------------- */
+  function clearChat() {
+    $('chatThread').innerHTML = '<div class="empty" id="chatEmpty">No questions yet — ask something about your uploaded documents.</div>';
+  }
+
+  $('askBtn').addEventListener('click', sendQuestion);
+  $('askInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendQuestion(); });
+
+  async function sendQuestion() {
+    const q = $('askInput').value.trim();
+    if (!q) return;
+    const empty = $('chatEmpty');
+    if (empty) empty.remove();
+
+    appendMessage('user', q);
+    $('askInput').value = '';
+    const thinkingId = appendMessage('assistant', '…thinking, reading the stacks…', true);
+
+    try {
+      const data = await api(`/workspaces/${state.activeWorkspace}/chat/ask/`, {
+        method: 'POST', body: JSON.stringify({ question: q }),
+      });
+      replaceMessage(thinkingId, data.answer, data.sources || []);
+      loadActivity();
+    } catch (err) {
+      replaceMessage(thinkingId, 'Something went wrong answering that question.', []);
+    }
+  }
+
+  let msgCounter = 0;
+  function appendMessage(role, text, isLoading=false) {
+    msgCounter += 1;
+    const id = 'msg-' + msgCounter;
+    const wrap = document.createElement('div');
+    wrap.className = `msg msg-${role}`;
+    wrap.id = id;
+    wrap.innerHTML = `
+      <div class="msg-label">${role === 'user' ? 'You' : 'RajMind'}</div>
+      <div class="msg-bubble">${escapeHtml(text)}</div>
+    `;
+    $('chatThread').appendChild(wrap);
+    $('chatThread').scrollTop = $('chatThread').scrollHeight;
+    return id;
+  }
+
+  function replaceMessage(id, text, sources) {
+    const wrap = $(id);
+    let citationsHtml = '';
+    if (sources.length) {
+      citationsHtml = '<div class="citation-row">' + sources.map((s, i) => `
+        <div class="citation-chip" data-doc='${escapeAttr(JSON.stringify(s))}' data-idx="${i+1}">
+          <span class="num">${i+1}</span> ${escapeHtml(s.title)}
+        </div>
+      `).join('') + '</div>';
+    }
+    wrap.querySelector('.msg-bubble').innerHTML = escapeHtml(text).replace(/\n/g, '<br>') + citationsHtml;
+    wrap.querySelectorAll('.citation-chip').forEach(chip => {
+      chip.addEventListener('click', () => openDrawer(JSON.parse(chip.dataset.doc), chip.dataset.idx));
+    });
+  }
+
+  /* ---------------- CITATION DRAWER ---------------- */
+  function openDrawer(doc, idx) {
+    $('drawerContent').innerHTML = `
+      <div class="drawer-card">
+        <div class="drawer-card-title"><span class="drawer-card-index">${idx}</span>${escapeHtml(doc.title)}</div>
+        <div class="drawer-card-meta">${doc.file_type.toUpperCase()} · document #${doc.document_id}</div>
+      </div>
+      <p style="font-size:13px; line-height:1.7; color:#5a4f3f;">
+        This answer drew on content from this document. Open the
+        Documents tab to review the full file or re-index it if it changes.
+      </p>
+    `;
+    $('citationDrawer').classList.add('open');
+    $('drawerBackdrop').classList.add('open');
+  }
+  $('drawerClose').addEventListener('click', closeDrawer);
+  $('drawerBackdrop').addEventListener('click', closeDrawer);
+  function closeDrawer() {
+    $('citationDrawer').classList.remove('open');
+    $('drawerBackdrop').classList.remove('open');
+  }
+
+  /* ---------------- ACTIVITY ---------------- */
+  async function loadActivity() {
+    const data = await api(`/workspaces/${state.activeWorkspace}/analytics/dashboard/`);
+    const o = data.overview;
+    $('statGrid').innerHTML = `
+      <div class="stat-card"><div class="stat-value">${o.total_documents}</div><div class="stat-label">Documents indexed</div></div>
+      <div class="stat-card"><div class="stat-value">${o.total_searches}</div><div class="stat-label">Questions asked</div></div>
+      <div class="stat-card"><div class="stat-value">${o.avg_response_time}s</div><div class="stat-label">Avg. response time</div></div>
+      <div class="stat-card"><div class="stat-value">${o.searches_last_7_days}</div><div class="stat-label">Asked this week</div></div>
+    `;
+    const rows = data.recent_searches || [];
+    $('activityTable').innerHTML = rows.length ? rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.query)}</td>
+        <td class="mono">${escapeHtml(r.user_email)}</td>
+        <td>${r.sources_count}</td>
+        <td class="mono">${r.response_time.toFixed(2)}s</td>
+      </tr>
+    `).join('') : '<tr><td colspan="4" class="empty">No activity yet.</td></tr>';
+  }
+
+  /* ---------------- UTIL ---------------- */
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escapeAttr(str) { return str.replace(/'/g, '&apos;'); }
+  function formatDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+if (state.token) {
+  enterApp();
+}
+})();
+</script>
+</body>
+</html>
