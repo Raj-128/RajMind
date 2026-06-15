@@ -115,43 +115,33 @@ PostgreSQL  Redis     ChromaDB    Celery Worker
 
 ### Login & Authentication
 
-Add Screenshot Here
 
-```markdown
 ![Login](screenshots/login.png)
-```
+
 
 ### Workspace Dashboard
 
-Add Screenshot Here
 
-```markdown
 ![Workspace](screenshots/workspace.png)
-```
+
 
 ### Document Upload & Processing
 
-Add Screenshot Here
 
-```markdown
 ![Documents](screenshots/documents.png)
-```
+
 
 ### AI Knowledge Assistant
 
-Add Screenshot Here
 
-```markdown
 ![Chat](screenshots/chat.png)
-```
+
 
 ### Analytics Dashboard
 
-Add Screenshot Here
 
-```markdown
 ![Analytics](screenshots/analytics.png)
-```
+
 
 ---
 
