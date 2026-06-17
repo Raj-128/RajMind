@@ -7,7 +7,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = ['*']
-
+CSRF_TRUSTED_ORIGINS = [
+    'https://rajmind-production.up.railway.app',
+]
 GEMINI_API_KEY = config('GEMINI_API_KEY')
 
 SIMPLE_JWT = {
@@ -126,3 +128,4 @@ CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://redis:6
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
+
