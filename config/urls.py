@@ -18,8 +18,18 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import FileResponse, HttpResponse
+
+
+def frontend(request):
+    # The single-page frontend, served from the same site as the API.
+    return FileResponse(open(settings.BASE_DIR / 'frontend.html', 'rb'), content_type='text/html')
+
 
 urlpatterns = [
+    path('', frontend),
+    # Uptime-monitor ping target: keeps the Render free instance awake, no DB hit.
+    path('health/', lambda request: HttpResponse('ok')),
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
     path('api/workspaces/', include('workspaces.urls')),

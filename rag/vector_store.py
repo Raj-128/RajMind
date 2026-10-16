@@ -1,76 +1,72 @@
-import time
-
-import chromadb
+import numpy as np
 from google import genai
-from google.genai import types
 from django.conf import settings
 
+from documents.models import DocumentChunk
+
+EMBEDDING_MODEL = "gemini-embedding-001"
+EMBED_BATCH_SIZE = 100  # chunks per Gemini call
+
 client_genai = genai.Client(api_key=settings.GEMINI_API_KEY)
-client = chromadb.PersistentClient(path="./chromadb_store")
 
 
-def get_or_create_collection(workspace_id):
-    collection_name = f"workspace_{workspace_id}"
-    return client.get_or_create_collection(name=collection_name)
+def embed_texts(texts):
+    vectors = []
+    for start in range(0, len(texts), EMBED_BATCH_SIZE):
+        result = client_genai.models.embed_content(
+            model=EMBEDDING_MODEL,
+            contents=texts[start:start + EMBED_BATCH_SIZE],
+        )
+        vectors.extend(e.values for e in result.embeddings)
+    return vectors
 
 
 def get_embedding(text):
-    result = client_genai.models.embed_content(
-        model="gemini-embedding-001",
-        contents=text,
-    )
-    return result.embeddings[0].values
+    return embed_texts([text])[0]
 
 
 def store_chunks(workspace_id, document_id, chunks):
-    collection = get_or_create_collection(workspace_id)
-
-    ids = []
-    embeddings = []
-    documents = []
-    metadatas = []
-
-    for i, chunk in enumerate(chunks):
-        chunk_id = f"doc_{document_id}_chunk_{i}"
-        embedding = get_embedding(chunk)
-        time.sleep(1)
-
-        ids.append(chunk_id)
-        embeddings.append(embedding)
-        documents.append(chunk)
-        metadatas.append({
-            "document_id": str(document_id),
-            "chunk_index": i
-        })
-
-    collection.add(
-        ids=ids,
-        embeddings=embeddings,
-        documents=documents,
-        metadatas=metadatas
-    )
-
-    return len(chunks)
+    """Embeds the document's chunks and saves the vectors on its DocumentChunk rows."""
+    rows = list(DocumentChunk.objects.filter(document_id=document_id).order_by('chunk_index'))
+    for row, vector in zip(rows, embed_texts([row.content for row in rows])):
+        row.embedding = vector
+    DocumentChunk.objects.bulk_update(rows, ['embedding'])
+    return len(rows)
 
 
 def search_similar_chunks(workspace_id, query, n_results=5):
-    collection = get_or_create_collection(workspace_id)
+    """Cosine-similarity search over a workspace's chunks.
 
-    query_embedding = client_genai.models.embed_content(
-        model="gemini-embedding-001",
-        contents=query,
-    ).embeddings[0].values
-
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=n_results
+    Returns the same shape Chroma did: {'documents': [[...]], 'metadatas': [[...]]}.
+    """
+    # ponytail: scans every chunk in the workspace per query (fine for thousands of
+    # chunks); switch to pgvector if a workspace grows to hundreds of thousands.
+    rows = list(
+        DocumentChunk.objects.filter(
+            document__workspace_id=workspace_id,
+            document__status='completed',
+            embedding__isnull=False,
+        ).values('document_id', 'chunk_index', 'content', 'embedding')
     )
+    if not rows:
+        return {'documents': [[]], 'metadatas': [[]]}
 
-    return results
+    matrix = np.array([row['embedding'] for row in rows], dtype=np.float32)
+    query_vector = np.array(get_embedding(query), dtype=np.float32)
+    scores = matrix @ query_vector / (
+        np.linalg.norm(matrix, axis=1) * np.linalg.norm(query_vector) + 1e-10
+    )
+    best = np.argsort(scores)[::-1][:n_results]
+
+    return {
+        'documents': [[rows[i]['content'] for i in best]],
+        'metadatas': [[
+            {'document_id': str(rows[i]['document_id']), 'chunk_index': rows[i]['chunk_index']}
+            for i in best
+        ]],
+    }
 
 
 def delete_document_chunks(workspace_id, document_id):
-    collection = get_or_create_collection(workspace_id)
-    results = collection.get(where={"document_id": str(document_id)})
-    if results['ids']:
-        collection.delete(ids=results['ids'])
+    # Vectors live on DocumentChunk rows, which are deleted with their document.
+    DocumentChunk.objects.filter(document_id=document_id).delete()

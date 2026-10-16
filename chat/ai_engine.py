@@ -4,6 +4,8 @@ from rag.vector_store import search_similar_chunks
 from documents.models import Document
 
 client_genai = genai.Client(api_key=settings.GEMINI_API_KEY)
+# gemini-2.5-* models are no longer available to new API keys.
+CHAT_MODEL = "gemini-3.5-flash"
 
 
 def generate_answer(workspace_id, question, conversation_history=None):
@@ -67,7 +69,7 @@ Instructions:
 Answer:"""
 
     response = client_genai.models.generate_content(
-        model="gemini-2.5-flash",
+        model=CHAT_MODEL,
         contents=prompt
     )
 

@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from .models import Document
 from .serializers import DocumentSerializer
 from workspaces.models import Workspace, WorkspaceMember
-from rag.tasks import process_document_task
+from rag.tasks import start_document_processing
 
 def get_workspace_or_403(workspace_id, user):
     workspace = get_object_or_404(Workspace, id=workspace_id)
@@ -44,7 +44,7 @@ class DocumentListCreateView(generics.ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         document = serializer.save()
 
-        process_document_task.delay(document.id)
+        start_document_processing(document.id)
 
         return Response(DocumentSerializer(document).data, status=status.HTTP_201_CREATED)
 class DocumentDetailView(generics.RetrieveDestroyAPIView):

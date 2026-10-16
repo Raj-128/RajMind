@@ -35,6 +35,9 @@ class DocumentChunk(models.Model):
     chunk_index = models.IntegerField()
     content = models.TextField()
     embedding_id = models.CharField(max_length=255, blank=True, null=True)
+    # Gemini embedding vector, kept in the database so it survives restarts
+    # (the server disk on free hosting is wiped on every deploy/restart).
+    embedding = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

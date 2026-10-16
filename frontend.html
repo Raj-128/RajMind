@@ -568,6 +568,9 @@ if(savedUser){
     state.user = JSON.parse(savedUser);
 }
   const $ = (id) => document.getElementById(id);
+  // Served by the Django app itself (e.g. on Render): talk to this same site.
+  // Opened as a local file: keep the local dev server address.
+  if (location.protocol.startsWith('http')) $('apiBase').value = location.origin + '/api';
   const apiBase = () => $('apiBase').value.replace(/\/$/, '');
 
   async function api(path, opts = {}) {
