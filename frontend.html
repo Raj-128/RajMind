@@ -397,12 +397,8 @@
         <div class="error-msg" id="registerError"></div>
       </form>
 
-      <div class="hint" style="margin-top:16px">
-        API endpoint:
-        <input id="apiBase" class="mono" value="http://127.0.0.1:8000/api"
-          style="background:var(--ink-3); border:1px solid var(--line); color:var(--text);
-                 border-radius:6px; padding:4px 8px; font-size:11px; width:200px; margin-left:6px;">
-      </div>
+      <!-- API address: set automatically to this site when served online; local dev server otherwise. -->
+      <input id="apiBase" type="hidden" value="http://127.0.0.1:8000/api">
     </div>
   </div>
 </div>
@@ -717,6 +713,7 @@ if(savedUser){
     const file = $('docFile').files[0];
     const title = $('docTitle').value || (file ? file.name : '');
     if (!file) { $('uploadError').textContent = 'Choose a file first.'; return; }
+    if (!state.activeWorkspace) { $('uploadError').textContent = 'Create or select a workspace first (top right).'; return; }
     const fd = new FormData();
     fd.append('title', title);
     fd.append('file', file);
@@ -728,7 +725,10 @@ if(savedUser){
       await loadDocuments();
       pollDocuments();
     } catch (err) {
-      $('uploadError').textContent = 'Upload failed. Check the file type and size.';
+      // Show the server's reason (e.g. "File size must not exceed 10MB.") instead of a generic guess.
+      const d = (err && err.data) || {};
+      const reason = [].concat(d.file || d.title || d.error || d.detail || []).join(' ');
+      $('uploadError').textContent = 'Upload failed: ' + (reason || `server error (${err && err.status || 'network'}). Try again in a moment.`);
     }
   });
 
