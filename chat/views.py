@@ -10,10 +10,14 @@ from .serializers import (
     AskQuestionSerializer,
     MessageSerializer
 )
+import logging
 import time
+from google.genai import errors as genai_errors
 from analytics_app.models import SearchAnalytics
 from .ai_engine import generate_answer
 from workspaces.models import Workspace, WorkspaceMember
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationListCreateView(generics.ListCreateAPIView):
@@ -92,7 +96,15 @@ class AskQuestionView(APIView):
 
         # Generate AI answer
         start_time = time.time()
-        result = generate_answer(workspace_id, question, history)
+        try:
+            result = generate_answer(workspace_id, question, history)
+        except genai_errors.APIError as e:
+            logger.exception("Gemini call failed while answering")
+            if e.code == 429:
+                message = "The AI is at its free usage limit for this minute. Please try again in about a minute."
+            else:
+                message = "The AI service is unavailable right now. Please try again shortly."
+            return Response({'error': message}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         elapsed_time = time.time() - start_time
 
         # Save assistant message

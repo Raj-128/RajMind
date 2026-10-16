@@ -1,11 +1,17 @@
+import logging
+
 from google import genai
+from google.genai import errors as genai_errors
 from django.conf import settings
 from rag.vector_store import search_similar_chunks
 from documents.models import Document
 
+logger = logging.getLogger(__name__)
+
 client_genai = genai.Client(api_key=settings.GEMINI_API_KEY)
 # gemini-2.5-* models are no longer available to new API keys.
 CHAT_MODEL = "gemini-3.5-flash"
+GROQ_MODEL = "openai/gpt-oss-120b"  # backup when Gemini fails (needs GROQ_API_KEY)
 
 
 def generate_answer(workspace_id, question, conversation_history=None):
@@ -68,12 +74,25 @@ Instructions:
 
 Answer:"""
 
-    response = client_genai.models.generate_content(
-        model=CHAT_MODEL,
-        contents=prompt
-    )
-
     return {
-        'answer': response.text,
+        'answer': _complete(prompt),
         'sources': sources
     }
+
+
+def _complete(prompt):
+    """Gemini first; if it fails (e.g. free per-minute limit) and GROQ_API_KEY is
+    set, Groq answers instead. Re-raises Gemini's error if there's no fallback."""
+    try:
+        return client_genai.models.generate_content(model=CHAT_MODEL, contents=prompt).text
+    except genai_errors.APIError:
+        if not settings.GROQ_API_KEY:
+            raise
+        logger.warning("Gemini failed, answering with Groq instead", exc_info=True)
+    from groq import Groq
+    completion = Groq(api_key=settings.GROQ_API_KEY).chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+    )
+    return completion.choices[0].message.content

@@ -830,7 +830,9 @@ if(savedUser){
       replaceMessage(thinkingId, data.answer, data.sources || []);
       loadActivity();
     } catch (err) {
-      replaceMessage(thinkingId, 'Something went wrong answering that question.', []);
+      // e.g. "The AI is at its free usage limit for this minute..." from the server
+      const reason = err && err.data && (err.data.error || err.data.detail);
+      replaceMessage(thinkingId, reason || 'Something went wrong answering that question.', []);
     }
   }
 
