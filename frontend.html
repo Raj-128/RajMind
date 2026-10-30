@@ -2,13 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title> RajMind — Knowledge Assistant</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#14171f">
+<title>RajMind — Knowledge Assistant</title>
 <!-- Tab icon: app-style SVG inlined as a data URI, no image file needed -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23E9BC6C'/><stop offset='1' stop-color='%23C4892F'/></linearGradient></defs><rect width='64' height='64' rx='15' fill='url(%23g)'/><text x='29' y='47' text-anchor='middle' font-family='Georgia,Times New Roman,serif' font-weight='700' font-size='42' fill='%2314171F'>R</text><path d='M49 12l2 4.6 4.6 2-4.6 2L49 25.2l-2-4.6-4.6-2 4.6-2z' fill='%2314171F'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Markdown rendering for answers (sanitized). If these fail to load, answers show as plain text. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <style>
   :root{
     --ink:#14171f;
@@ -24,6 +28,7 @@
     --sage:#7db89a;
     --terracotta:#d9786e;
     --radius: 10px;
+    --topbar: 60px;
   }
 
   *{ box-sizing:border-box; }
@@ -34,73 +39,109 @@
     font-family: 'Inter', sans-serif;
     min-height:100vh;
     -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
   }
   .mono{ font-family:'IBM Plex Mono', monospace; }
   h1,h2,h3,.display{ font-family:'Fraunces', serif; }
-
   a{ color: var(--gold); text-decoration:none; }
+  button{ font-family:'Inter',sans-serif; }
+  :focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+  [hidden]{ display:none !important; }
 
   /* ---------- Scaffolding ---------- */
   .app{ display:none; min-height:100vh; }
   .app.active{ display:flex; }
 
   .topbar{
-    position:fixed; top:0; left:0; right:0; height:60px;
-    display:flex; align-items:center; justify-content:space-between;
+    position:fixed; top:0; left:0; right:0; height:var(--topbar);
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
     padding:0 24px; background: var(--ink-2); border-bottom:1px solid var(--line);
     z-index:20;
   }
-  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
   .brand-mark{
     width:28px; height:28px; border-radius:6px; background: var(--gold);
     display:flex; align-items:center; justify-content:center;
     color: var(--ink); font-family:'Fraunces', serif; font-weight:700; font-size:16px;
   }
   .brand-name{ font-family:'Fraunces', serif; font-size:18px; letter-spacing:0.02em; }
+  .menu-btn{
+    display:none; background:none; border:none; color: var(--text); font-size:22px;
+    cursor:pointer; padding:4px 6px; line-height:1;
+  }
 
-  .topbar-right{ display:flex; align-items:center; gap:14px; }
+  .topbar-right{ display:flex; align-items:center; gap:10px; min-width:0; }
   .workspace-pill{
-    display:flex; align-items:center; gap:8px;
+    display:flex; align-items:center; gap:8px; min-width:0;
     background: var(--ink-3); border:1px solid var(--line); border-radius:999px;
     padding:6px 14px; font-size:13px; color: var(--muted);
   }
   .workspace-pill select{
     background:transparent; border:none; color: var(--text); font-size:13px;
-    font-family:'Inter',sans-serif; outline:none; max-width:160px;
+    font-family:'Inter',sans-serif; outline:none; max-width:180px; min-width:0;
   }
   .workspace-pill select option{ background: var(--ink-2); color: var(--text); }
 
-  .user-chip{ font-size:13px; color: var(--muted); }
   .btn-ghost{
     background:transparent; border:1px solid var(--line); color: var(--text);
     padding:6px 14px; border-radius:999px; font-size:13px; cursor:pointer;
-    font-family:'Inter',sans-serif; transition: border-color .15s, color .15s;
+    transition: border-color .15s, color .15s; white-space:nowrap;
   }
   .btn-ghost:hover{ border-color: var(--gold); color: var(--gold); }
+  .btn-ghost.danger:hover{ border-color: var(--terracotta); color: var(--terracotta); }
+  .btn-ghost.sm{ padding:4px 10px; font-size:12px; }
 
   /* ---------- Sidebar ---------- */
-  .layout{ display:flex; width:100%; padding-top:60px; }
+  .layout{ display:flex; width:100%; padding-top:var(--topbar); }
   .sidebar{
-    width:220px; flex-shrink:0; padding:24px 14px;
-    border-right:1px solid var(--line); position:fixed; top:60px; bottom:0; left:0;
-    background: var(--ink-2);
-    overflow-y:auto;
+    width:240px; flex-shrink:0; padding:20px 14px 14px;
+    border-right:1px solid var(--line); position:fixed; top:var(--topbar); bottom:0; left:0;
+    background: var(--ink-2); display:flex; flex-direction:column; z-index:15;
+    transition: transform .25s ease;
   }
   .nav-eyebrow{
     font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.12em;
     color: var(--muted); text-transform:uppercase; padding:0 12px 8px;
+    display:flex; justify-content:space-between; align-items:center;
   }
   .nav-item{
     display:flex; align-items:center; gap:10px; padding:10px 12px;
     border-radius: var(--radius); color: var(--muted); font-size:14px;
     cursor:pointer; transition: background .15s, color .15s; margin-bottom:2px;
+    background:none; border:none; width:100%; text-align:left;
   }
   .nav-item:hover{ background: var(--ink-3); color: var(--text); }
   .nav-item.active{ background: var(--gold-soft); color: var(--gold); }
   .nav-icon{ width:18px; text-align:center; font-size:15px; }
 
-  .main{ flex:1; margin-left:220px; padding:32px 36px 80px; max-width:880px; }
-  .main.wide{ max-width:1040px; }
+  .chat-list{ flex:1; overflow-y:auto; margin:0 -4px; padding:0 4px; min-height:60px; }
+  .chat-item{
+    display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:8px;
+    font-size:13px; color: var(--muted); cursor:pointer;
+  }
+  .chat-item:hover{ background: var(--ink-3); color: var(--text); }
+  .chat-item.active{ background: var(--ink-3); color: var(--text); }
+  .chat-item span{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chat-item button{
+    background:none; border:none; color: var(--muted); cursor:pointer; font-size:12px;
+    opacity:0; padding:2px 4px;
+  }
+  .chat-item:hover button, .chat-item.active button{ opacity:1; }
+  .chat-item button:hover{ color: var(--terracotta); }
+  .new-chat{ background:none; border:none; color: var(--gold); cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; }
+
+  .sidebar-footer{
+    border-top:1px solid var(--line); padding-top:12px; margin-top:10px;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  .user-chip{ font-size:12px; color: var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .sidebar-backdrop{
+    position:fixed; inset:var(--topbar) 0 0 0; background:rgba(0,0,0,0.45); z-index:14;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+
+  .main{ flex:1; margin-left:240px; padding:32px 36px 40px; max-width:1080px; min-width:0; }
 
   .view{ display:none; }
   .view.active{ display:block; animation: fadeUp .35s ease; }
@@ -112,38 +153,37 @@
     color: var(--gold); text-transform:uppercase; margin-bottom:6px;
   }
   .view-title{ font-size: 28px; font-weight:600; margin:0; }
-  .view-sub{ color: var(--muted); font-size:14px; margin-top:6px; max-width:520px; }
+  .view-sub{ color: var(--muted); font-size:14px; margin-top:6px; max-width:560px; line-height:1.55; }
 
   /* ---------- Cards / Panels ---------- */
   .panel{
     background: var(--ink-2); border:1px solid var(--line); border-radius: 14px;
     padding:20px 22px; margin-bottom:18px;
   }
-  .panel-title{ font-size:15px; font-weight:600; margin:0 0 14px; }
+  .panel-title{ font-size:15px; font-weight:600; margin:0 0 14px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .panel-title .count{ font-family:'IBM Plex Mono', monospace; font-size:12px; color: var(--muted); font-weight:400; }
 
   .field{ margin-bottom:14px; }
   .field label{ display:block; font-size:12px; color: var(--muted); margin-bottom:6px; }
-  .field input, .field select{
+  .field input, .field select, .ask-bar textarea{
     width:100%; background: var(--ink-3); border:1px solid var(--line); border-radius:8px;
     padding:10px 12px; color: var(--text); font-size:14px; font-family:'Inter',sans-serif;
     outline:none; transition: border-color .15s;
   }
-  .field input:focus, .field select:focus{ border-color: var(--gold); }
+  .field input:focus, .field select:focus, .ask-bar textarea:focus{ border-color: var(--gold); }
 
   .btn{
     background: var(--gold); color: var(--ink); border:none; border-radius:8px;
     padding:10px 20px; font-size:14px; font-weight:600; cursor:pointer;
-    font-family:'Inter',sans-serif; transition: transform .12s, box-shadow .12s;
+    transition: transform .12s, box-shadow .12s; white-space:nowrap;
   }
   .btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 14px rgba(215,165,82,0.25); }
   .btn:active{ transform: translateY(0); }
   .btn:disabled{ opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
-  .btn-secondary{
-    background:transparent; border:1px solid var(--line); color: var(--text);
-  }
-  .btn-secondary:hover{ border-color: var(--gold); color: var(--gold); box-shadow:none; }
+  .btn-danger{ background: var(--terracotta); }
 
-  .error-msg{ color: var(--terracotta); font-size:13px; margin-top:8px; }
+  .error-msg{ color: var(--terracotta); font-size:13px; margin-top:8px; line-height:1.5; }
+  .error-msg:empty{ display:none; }
   .hint{ color: var(--muted); font-size:12px; margin-top:6px; }
 
   /* ---------- Auth screen ---------- */
@@ -182,6 +222,7 @@
   .tab{
     flex:1; text-align:center; padding:8px 0; border-radius:8px; font-size:13px;
     color: var(--muted); cursor:pointer; transition: background .15s, color .15s;
+    background:none; border:none;
   }
   .tab.active{ background: var(--gold); color: var(--ink); font-weight:600; }
 
@@ -190,69 +231,100 @@
 
   /* ---------- Documents ---------- */
   .doc-row{
-    display:flex; align-items:center; justify-content:space-between;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
     padding:14px 0; border-bottom:1px solid var(--line);
   }
   .doc-row:last-child{ border-bottom:none; }
-  .doc-meta{ display:flex; align-items:center; gap:14px; }
+  .doc-meta{ display:flex; align-items:center; gap:14px; min-width:0; }
+  .doc-meta > div:last-child{ min-width:0; }
   .doc-icon{
-    width:38px; height:38px; border-radius:8px; background: var(--ink-3);
+    width:38px; height:38px; border-radius:8px; background: var(--ink-3); flex-shrink:0;
     display:flex; align-items:center; justify-content:center; font-size:16px; color: var(--gold);
   }
-  .doc-name{ font-size:14px; font-weight:500; }
-  .doc-sub{ font-size:12px; color: var(--muted); margin-top:2px; }
+  .doc-name{ font-size:14px; font-weight:500; overflow-wrap:anywhere; }
+  .doc-sub{ font-size:12px; color: var(--muted); margin-top:2px; overflow-wrap:anywhere; }
+  .doc-error{ font-size:12px; color: var(--terracotta); margin-top:4px; }
+  .doc-actions{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
   .badge{
     font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase;
     letter-spacing:0.06em; padding:4px 10px; border-radius:999px; border:1px solid var(--line);
   }
-  .badge-pending{ color:var(--gold); border-color: var(--gold-soft); background: var(--gold-soft); }
-  .badge-processing{ color:var(--gold); border-color: var(--gold-soft); background: var(--gold-soft); }
+  .badge-pending, .badge-processing{ color:var(--gold); border-color: var(--gold-soft); background: var(--gold-soft); animation: pulse 1.6s ease-in-out infinite; }
   .badge-completed{ color:var(--sage); border-color: rgba(125,184,154,0.18); background: rgba(125,184,154,0.1); }
   .badge-failed{ color:var(--terracotta); border-color: rgba(217,120,110,0.18); background: rgba(217,120,110,0.1); }
+  @keyframes pulse{ 50%{ opacity:.55; } }
 
   .upload-zone{
-    border:1.5px dashed var(--line); border-radius:12px; padding:26px;
+    display:block; border:1.5px dashed var(--line); border-radius:12px; padding:26px;
     text-align:center; color: var(--muted); font-size:13px; margin-bottom:8px;
-    transition: border-color .15s, color .15s; cursor:pointer;
+    transition: border-color .15s, color .15s; cursor:pointer; overflow-wrap:anywhere;
   }
   .upload-zone:hover, .upload-zone.drag{ border-color: var(--gold); color: var(--gold); }
   .upload-zone input{ display:none; }
 
   /* ---------- Chat / Ask ---------- */
-  .chat-thread{ display:flex; flex-direction:column; gap:16px; margin-bottom:18px; }
-  .msg{ max-width:80%; }
+  #view-ask.active{ display:flex; flex-direction:column; min-height: calc(100vh - var(--topbar) - 72px); }
+  .chat-thread{ display:flex; flex-direction:column; gap:16px; margin-bottom:18px; flex:1; }
+  .msg{ max-width:82%; min-width:0; }
   .msg-user{ align-self:flex-end; }
   .msg-assistant{ align-self:flex-start; }
   .msg-bubble{
-    padding:13px 16px; border-radius:12px; font-size:14px; line-height:1.6;
+    padding:13px 16px; border-radius:12px; font-size:14px; line-height:1.65; overflow-wrap:anywhere;
   }
   .msg-user .msg-bubble{ background: var(--gold-soft); color: var(--text); border:1px solid var(--gold-soft); }
   .msg-assistant .msg-bubble{ background: var(--ink-3); border:1px solid var(--line); }
+  .msg-error .msg-bubble{ border-color: rgba(217,120,110,0.35); color: var(--terracotta); }
   .msg-label{
     font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:0.12em;
     text-transform:uppercase; color: var(--muted); margin-bottom:6px;
+    display:flex; align-items:center; gap:10px;
   }
+  .copy-btn{ background:none; border:none; color: var(--muted); cursor:pointer; font-family:inherit; font-size:10px; letter-spacing:inherit; text-transform:uppercase; padding:0; }
+  .copy-btn:hover{ color: var(--gold); }
 
-  .citation-row{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  /* Markdown inside answers */
+  .md > :first-child{ margin-top:0; }
+  .md > :last-child{ margin-bottom:0; }
+  .md p{ margin:0 0 10px; }
+  .md ul, .md ol{ margin:0 0 10px; padding-left:22px; }
+  .md li{ margin-bottom:4px; }
+  .md h1, .md h2, .md h3, .md h4{ font-size:15px; margin:14px 0 8px; font-family:'Inter',sans-serif; }
+  .md code{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; background: var(--ink); padding:1px 5px; border-radius:4px; }
+  .md pre{ background: var(--ink); padding:12px; border-radius:8px; overflow-x:auto; }
+  .md pre code{ background:none; padding:0; }
+  .md table{ border-collapse:collapse; display:block; overflow-x:auto; margin:0 0 10px; }
+  .md th, .md td{ border:1px solid var(--line); padding:6px 10px; text-align:left; }
+  .md blockquote{ margin:0 0 10px; padding-left:12px; border-left:3px solid var(--gold-soft); color: var(--muted); }
+
+  .typing{ display:inline-flex; gap:5px; align-items:center; height:20px; }
+  .typing i{ width:6px; height:6px; border-radius:50%; background: var(--gold); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2){ animation-delay:.2s; }
+  .typing i:nth-child(3){ animation-delay:.4s; }
+  @keyframes blink{ 0%,80%,100%{ opacity:.25; transform:translateY(0);} 40%{ opacity:1; transform:translateY(-3px);} }
+
+  .citation-row{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
   .citation-chip{
-    display:flex; align-items:center; gap:6px; cursor:pointer;
+    display:flex; align-items:center; gap:6px; cursor:pointer; border:none; max-width:100%;
     font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--ink);
     background: var(--parchment); border-radius:999px; padding:5px 12px;
     transition: transform .12s;
   }
+  .citation-chip span:last-child{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .citation-chip:hover{ transform: translateY(-1px); }
   .citation-chip .num{
-    background: var(--gold); color: var(--ink); border-radius:50%;
+    background: var(--gold); color: var(--ink); border-radius:50%; flex-shrink:0;
     width:16px; height:16px; display:flex; align-items:center; justify-content:center;
     font-size:10px; font-weight:700;
   }
 
-  .ask-bar{ display:flex; gap:10px; }
-  .ask-bar input{ flex:1; }
-
-  .empty{
-    text-align:center; color: var(--muted); font-size:13px; padding:40px 0;
+  .ask-bar{
+    display:flex; gap:10px; align-items:flex-end; position:sticky; bottom:0;
+    background: var(--ink); padding:12px 0 16px; padding-bottom:max(16px, env(safe-area-inset-bottom));
   }
+  .ask-bar textarea{ flex:1; resize:none; max-height:160px; line-height:1.5; }
+
+  .empty{ text-align:center; color: var(--muted); font-size:13px; padding:40px 0; line-height:1.6; }
+  .suggestions{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:16px; }
 
   /* ---------- Citation drawer ---------- */
   .drawer-backdrop{
@@ -262,7 +334,7 @@
   .drawer-backdrop.open{ opacity:1; pointer-events:auto; }
 
   .drawer{
-    position:fixed; top:0; right:0; bottom:0; width:340px;
+    position:fixed; top:0; right:0; bottom:0; width:400px; max-width:100%;
     background: var(--parchment); color: var(--parchment-ink);
     transform: translateX(100%); transition: transform .28s ease; z-index:31;
     padding:28px 26px; overflow-y:auto;
@@ -275,13 +347,13 @@
   }
   .drawer-close{
     position:absolute; top:22px; right:22px; background:none; border:none;
-    font-size:18px; color:#9c7a3a; cursor:pointer;
+    font-size:14px; color:#9c7a3a; cursor:pointer;
   }
   .drawer-card{
     border:1px solid rgba(43,38,32,0.15); border-radius:10px; padding:16px;
     margin-bottom:14px; background: rgba(255,255,255,0.4);
   }
-  .drawer-card-title{ font-family:'Fraunces', serif; font-size:17px; margin:0 0 6px; }
+  .drawer-card-title{ font-family:'Fraunces', serif; font-size:17px; margin:0 0 6px; overflow-wrap:anywhere; }
   .drawer-card-meta{
     font-family:'IBM Plex Mono', monospace; font-size:11px; color:#8a7350;
     text-transform:uppercase; letter-spacing:0.06em;
@@ -290,6 +362,10 @@
     display:inline-flex; align-items:center; justify-content:center;
     width:22px; height:22px; border-radius:50%; background:#2b2620; color: var(--parchment);
     font-size:11px; font-weight:700; margin-right:8px; font-family:'IBM Plex Mono', monospace;
+  }
+  .excerpt{
+    font-size:13px; line-height:1.7; color:#4a4034; margin:0 0 12px;
+    border-left:3px solid #d7a552; padding:2px 0 2px 12px; white-space:pre-wrap; overflow-wrap:anywhere;
   }
 
   /* ---------- Analytics ---------- */
@@ -301,18 +377,19 @@
   .stat-value{ font-family:'Fraunces', serif; font-size:30px; font-weight:600; color: var(--gold); }
   .stat-label{ font-size:12px; color: var(--muted); margin-top:4px; }
 
+  .table-wrap{ overflow-x:auto; }
   .table{ width:100%; border-collapse: collapse; font-size:13px; }
   .table th{
     text-align:left; font-family:'IBM Plex Mono', monospace; font-size:10px;
     text-transform:uppercase; letter-spacing:0.08em; color: var(--muted);
-    padding:10px 0; border-bottom:1px solid var(--line);
+    padding:10px 12px 10px 0; border-bottom:1px solid var(--line); white-space:nowrap;
   }
-  .table td{ padding:12px 0; border-bottom:1px solid var(--line); }
+  .table td{ padding:12px 12px 12px 0; border-bottom:1px solid var(--line); }
   .table tr:last-child td{ border-bottom:none; }
 
   /* ---------- Members ---------- */
   .member-row{
-    display:flex; align-items:center; justify-content:space-between;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
     padding:12px 0; border-bottom:1px solid var(--line);
   }
   .member-row:last-child{ border-bottom:none; }
@@ -324,13 +401,52 @@
   .inline-form{ display:flex; gap:10px; align-items:flex-end; }
   .inline-form .field{ flex:1; margin-bottom:0; }
 
+  /* ---------- Toast ---------- */
+  .toast{
+    position:fixed; left:50%; bottom:24px; transform:translate(-50%, 20px); z-index:40;
+    background: var(--ink-3); border:1px solid var(--line); color: var(--text);
+    padding:10px 16px; border-radius:10px; font-size:13px; max-width:calc(100% - 32px);
+    opacity:0; pointer-events:none; transition: opacity .2s, transform .2s;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  .toast.show{ opacity:1; transform:translate(-50%, 0); }
+  .toast.error{ border-color: rgba(217,120,110,0.5); color: var(--terracotta); }
+
+  /* ---------- Mobile ---------- */
   @media (max-width: 860px){
-    .auth-grid{ grid-template-columns:1fr; }
-    .hero-title{ font-size:36px; }
-    .sidebar{ display:none; }
-    .main{ margin-left:0; padding:24px 16px 80px; }
-    .stat-grid{ grid-template-columns: repeat(2,1fr); }
-    .drawer{ width:88%; }
+    :root{ --topbar: 56px; }
+    .topbar{ padding:0 12px; }
+    .menu-btn{ display:block; }
+    .brand-name{ display:none; }
+    .workspace-pill{ padding:6px 10px; }
+    .workspace-pill > span{ display:none; }
+    .workspace-pill select{ max-width:42vw; }
+    .new-ws-label{ display:none; }
+
+    .sidebar{ transform: translateX(-100%); width:280px; max-width:85vw; }
+    body.nav-open .sidebar{ transform: translateX(0); }
+    body.nav-open .sidebar-backdrop{ opacity:1; pointer-events:auto; }
+
+    .main{ margin-left:0; padding:22px 16px 24px; }
+    .view-title{ font-size:24px; }
+    .view-header{ margin-bottom:20px; }
+    .panel{ padding:16px; }
+    .stat-grid{ grid-template-columns: repeat(2,1fr); gap:10px; }
+    .stat-value{ font-size:24px; }
+    .msg{ max-width:92%; }
+    .inline-form{ flex-wrap:wrap; }
+    .inline-form .field{ flex:1 1 100%; max-width:none !important; }
+    .inline-form .btn{ width:100%; }
+    .doc-row{ flex-wrap:wrap; }
+    .doc-actions{ margin-left:52px; }
+    .chat-item button{ opacity:1; }
+
+    .auth-grid{ grid-template-columns:1fr; gap:28px; }
+    .hero-title{ font-size:34px; }
+    .hero-stack{ margin-top:20px; }
+    .auth-card{ padding:22px; }
+    /* 16px stops iOS Safari from zooming into focused inputs */
+    .field input, .field select, .ask-bar textarea{ font-size:16px; }
   }
 </style>
 </head>
@@ -350,25 +466,25 @@
       <div class="hero-stack">
         <span class="stack-tag">RAG · vector search</span>
         <span class="stack-tag">Workspaces · RBAC</span>
-        <span class="stack-tag">Async via Celery</span>
+        <span class="stack-tag">Background indexing</span>
         <span class="stack-tag">Cited responses</span>
       </div>
     </div>
 
     <div class="auth-card">
-      <div class="tabs">
-        <div class="tab active" data-tab="login">Sign in</div>
-        <div class="tab" data-tab="register">Create account</div>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="login" type="button">Sign in</button>
+        <button class="tab" data-tab="register" type="button">Create account</button>
       </div>
 
       <form id="loginForm" class="auth-form active">
         <div class="field">
-          <label>Email</label>
-          <input type="email" id="loginEmail" required placeholder="you@company.com">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" required autocomplete="email" placeholder="you@company.com">
         </div>
         <div class="field">
-          <label>Password</label>
-          <input type="password" id="loginPassword" required placeholder="••••••••">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="••••••••">
         </div>
         <button class="btn" type="submit" style="width:100%">Sign in</button>
         <div class="error-msg" id="loginError"></div>
@@ -376,31 +492,28 @@
 
       <form id="registerForm" class="auth-form">
         <div class="field">
-          <label>Full name</label>
-          <input type="text" id="regFullName" required placeholder="Jane Doe">
+          <label for="regFullName">Full name</label>
+          <input type="text" id="regFullName" required autocomplete="name" placeholder="Jane Doe">
         </div>
         <div class="field">
-          <label>Username</label>
-          <input type="text" id="regUsername" required placeholder="janedoe">
+          <label for="regUsername">Username</label>
+          <input type="text" id="regUsername" required autocomplete="username" placeholder="janedoe">
         </div>
         <div class="field">
-          <label>Email</label>
-          <input type="email" id="regEmail" required placeholder="you@company.com">
+          <label for="regEmail">Email</label>
+          <input type="email" id="regEmail" required autocomplete="email" placeholder="you@company.com">
         </div>
         <div class="field">
-          <label>Password</label>
-          <input type="password" id="regPassword" required placeholder="••••••••">
+          <label for="regPassword">Password</label>
+          <input type="password" id="regPassword" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters">
         </div>
         <div class="field">
-          <label>Confirm password</label>
-          <input type="password" id="regPassword2" required placeholder="••••••••">
+          <label for="regPassword2">Confirm password</label>
+          <input type="password" id="regPassword2" required autocomplete="new-password" placeholder="••••••••">
         </div>
         <button class="btn" type="submit" style="width:100%">Create account</button>
         <div class="error-msg" id="registerError"></div>
       </form>
-
-      <!-- API address: set automatically to this site when served online; local dev server otherwise. -->
-      <input id="apiBase" type="hidden" value="http://127.0.0.1:8000/api">
     </div>
   </div>
 </div>
@@ -409,94 +522,101 @@
 <div id="appView" class="app">
   <div class="topbar">
     <div class="brand">
+      <button class="menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
       <div class="brand-mark">R</div>
       <div class="brand-name">RajMind</div>
     </div>
     <div class="topbar-right">
       <div class="workspace-pill">
         <span>Workspace</span>
-        <select id="workspaceSelect"></select>
+        <select id="workspaceSelect" aria-label="Workspace"></select>
       </div>
-      <button class="btn-ghost" id="newWorkspaceBtn">+ New workspace</button>
-      <span class="user-chip" id="userChip"></span>
-      <button class="btn-ghost" id="logoutBtn">Sign out</button>
+      <button class="btn-ghost" id="newWorkspaceBtn" title="New workspace">+<span class="new-ws-label"> New workspace</span></button>
     </div>
   </div>
 
   <div class="layout">
-    <div class="sidebar">
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    <nav class="sidebar">
       <div class="nav-eyebrow">Workspace</div>
-      <div class="nav-item active" data-view="ask"><span class="nav-icon">✦</span> Ask</div>
-      <div class="nav-item" data-view="documents"><span class="nav-icon">▤</span> Documents</div>
-      <div class="nav-item" data-view="members"><span class="nav-icon">◈</span> Members</div>
-      <div class="nav-item" data-view="activity"><span class="nav-icon">▱</span> Activity</div>
-    </div>
+      <button class="nav-item active" data-view="ask"><span class="nav-icon">✦</span> Ask</button>
+      <button class="nav-item" data-view="documents"><span class="nav-icon">▤</span> Documents</button>
+      <button class="nav-item" data-view="members"><span class="nav-icon">◈</span> Members</button>
+      <button class="nav-item" data-view="activity"><span class="nav-icon">▱</span> Activity</button>
 
-    <div class="main wide">
+      <div class="nav-eyebrow" style="margin-top:18px">Chats <button class="new-chat" id="newChatBtn">+ New chat</button></div>
+      <div class="chat-list" id="chatList"></div>
+
+      <div class="sidebar-footer">
+        <span class="user-chip" id="userChip"></span>
+        <button class="btn-ghost sm" id="logoutBtn">Sign out</button>
+      </div>
+    </nav>
+
+    <main class="main">
 
       <!-- ASK VIEW -->
-      <div class="view active" id="view-ask">
+      <section class="view active" id="view-ask">
         <div class="view-header">
           <div class="view-eyebrow">Reading room</div>
           <h2 class="view-title">Ask the workspace</h2>
-          <p class="view-sub">Questions are answered using the documents uploaded to this workspace, with citations to the exact source.</p>
+          <p class="view-sub">Questions are answered using the documents uploaded to this workspace, with citations to the exact source. Follow-up questions keep the conversation's context.</p>
         </div>
 
-        <div class="chat-thread" id="chatThread">
-          <div class="empty" id="chatEmpty">No questions yet — ask something about your uploaded documents.</div>
-        </div>
+        <div class="chat-thread" id="chatThread"></div>
 
         <div class="ask-bar">
-          <input type="text" id="askInput" placeholder="e.g. What does this document say about onboarding?">
+          <textarea id="askInput" rows="1" placeholder="Ask about your documents…  (Shift+Enter for a new line)"></textarea>
           <button class="btn" id="askBtn">Ask</button>
         </div>
-      </div>
+      </section>
 
       <!-- DOCUMENTS VIEW -->
-      <div class="view" id="view-documents">
+      <section class="view" id="view-documents">
         <div class="view-header">
           <div class="view-eyebrow">The stacks</div>
           <h2 class="view-title">Documents</h2>
-          <p class="view-sub">Upload PDFs, Word documents, or text files. Each one is chunked, embedded, and indexed automatically in the background.</p>
+          <p class="view-sub">Upload PDFs, Word documents, or text files (max 10 MB). Each one is chunked, embedded, and indexed automatically in the background.</p>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="uploadPanel">
           <div class="panel-title">Upload a document</div>
           <div class="field">
-            <label>Title</label>
+            <label for="docTitle">Title <span style="opacity:.7">(optional — defaults to the file name)</span></label>
             <input type="text" id="docTitle" placeholder="e.g. Employee Handbook 2026">
           </div>
           <label class="upload-zone" id="uploadZone">
-            <input type="file" id="docFile" accept=".pdf,.doc,.docx,.txt">
-            <span id="uploadZoneText">Click to choose a PDF, DOCX, or TXT file</span>
+            <input type="file" id="docFile" accept=".pdf,.docx,.txt">
+            <span id="uploadZoneText">Click or drop a PDF, DOCX, or TXT file here</span>
           </label>
           <button class="btn" id="uploadBtn" style="margin-top:10px">Upload</button>
           <div class="error-msg" id="uploadError"></div>
         </div>
+        <div class="panel hint" id="viewerNote" hidden>You have viewer access in this workspace: you can ask questions, but not upload or remove documents.</div>
 
         <div class="panel">
-          <div class="panel-title">Indexed documents</div>
+          <div class="panel-title">Indexed documents <span class="count" id="docCount"></span></div>
           <div id="docList"></div>
         </div>
-      </div>
+      </section>
 
       <!-- MEMBERS VIEW -->
-      <div class="view" id="view-members">
+      <section class="view" id="view-members">
         <div class="view-header">
           <div class="view-eyebrow">Roster</div>
           <h2 class="view-title">Members</h2>
-          <p class="view-sub">Invite teammates to this workspace and set what they can do.</p>
+          <p class="view-sub">Invite teammates to this workspace and set what they can do. Admins and members can manage documents; viewers can only ask questions.</p>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="invitePanel">
           <div class="panel-title">Invite a member</div>
           <div class="inline-form">
             <div class="field">
-              <label>Email</label>
+              <label for="inviteEmail">Email of a registered user</label>
               <input type="email" id="inviteEmail" placeholder="teammate@company.com">
             </div>
             <div class="field" style="max-width:160px">
-              <label>Role</label>
+              <label for="inviteRole">Role</label>
               <select id="inviteRole">
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
@@ -509,13 +629,29 @@
         </div>
 
         <div class="panel">
-          <div class="panel-title">Current members</div>
+          <div class="panel-title">Current members <span class="count" id="memberCount"></span></div>
           <div id="memberList"></div>
         </div>
-      </div>
+
+        <div class="panel" id="settingsPanel">
+          <div class="panel-title">Workspace settings</div>
+          <div class="inline-form">
+            <div class="field">
+              <label for="wsName">Workspace name</label>
+              <input type="text" id="wsName">
+            </div>
+            <button class="btn" id="renameWsBtn">Rename</button>
+          </div>
+          <div id="deleteWsRow" style="margin-top:16px">
+            <button class="btn btn-danger" id="deleteWsBtn">Delete workspace</button>
+            <div class="hint">Permanently deletes this workspace, its documents and all conversations.</div>
+          </div>
+          <div class="error-msg" id="settingsError"></div>
+        </div>
+      </section>
 
       <!-- ACTIVITY VIEW -->
-      <div class="view" id="view-activity">
+      <section class="view" id="view-activity">
         <div class="view-header">
           <div class="view-eyebrow">Ledger</div>
           <h2 class="view-title">Activity</h2>
@@ -526,62 +662,124 @@
 
         <div class="panel">
           <div class="panel-title">Recent questions</div>
-          <table class="table">
-            <thead>
-              <tr><th>Query</th><th>Asked by</th><th>Sources</th><th>Response time</th></tr>
-            </thead>
-            <tbody id="activityTable"></tbody>
-          </table>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>Query</th><th>Asked by</th><th>Sources</th><th>Response</th><th>When</th></tr>
+              </thead>
+              <tbody id="activityTable"></tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      </section>
 
-    </div>
+    </main>
   </div>
 </div>
 
 <!-- ================= CITATION DRAWER ================= -->
 <div class="drawer-backdrop" id="drawerBackdrop"></div>
-<div class="drawer" id="citationDrawer">
+<aside class="drawer" id="citationDrawer" aria-label="Cited sources">
   <button class="drawer-close" id="drawerClose">✕ Close</button>
-  <div class="drawer-eyebrow">Cited sources</div>
+  <div class="drawer-eyebrow">Cited source</div>
   <div id="drawerContent"></div>
-</div>
+</aside>
+
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 (() => {
+  const $ = (id) => document.getElementById(id);
+  const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+  // Same-site API when served by Django (e.g. on Render); local dev server when opened as a file.
+  const API_BASE = location.protocol.startsWith('http') ? location.origin + '/api' : 'http://127.0.0.1:8000/api';
+
+  const store = {
+    get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} },
+    remove(key) { try { localStorage.removeItem(key); } catch (e) {} },
+  };
+
   const state = {
-    token: null,
-    user: null,
+    token: store.get('token'),
+    refresh: store.get('refresh'),
+    user: store.get('user'),
     workspaces: [],
     activeWorkspace: null,
+    role: null,
+    conversationId: null,
+    docCount: 0,
+    asking: false,
+    pollTimer: null,
   };
-  const savedToken = localStorage.getItem("token");
-  const savedUser = localStorage.getItem("user");
 
-if(savedToken){
-    state.token = savedToken;
-}
-
-if(savedUser){
-    state.user = JSON.parse(savedUser);
-}
-  const $ = (id) => document.getElementById(id);
-  // Served by the Django app itself (e.g. on Render): talk to this same site.
-  // Opened as a local file: keep the local dev server address.
-  if (location.protocol.startsWith('http')) $('apiBase').value = location.origin + '/api';
-  const apiBase = () => $('apiBase').value.replace(/\/$/, '');
-
-  async function api(path, opts = {}) {
-    const headers = opts.headers || {};
+  /* ---------------- API ---------------- */
+  async function api(path, opts = {}, retry = true) {
+    const headers = { ...(opts.headers || {}) };
     if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
-    if (!(opts.body instanceof FormData) && opts.body) {
-      headers['Content-Type'] = 'application/json';
+    if (opts.body && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+    let res;
+    try {
+      res = await fetch(API_BASE + path, { ...opts, headers });
+    } catch (e) {
+      throw { status: 0, data: { error: 'Network error — check your connection and try again.' } };
     }
-    const res = await fetch(apiBase() + path, { ...opts, headers });
+    // Access tokens last 60 minutes: refresh once silently, then retry the request.
+    if (res.status === 401 && retry && state.refresh && !/^\/auth\/(login|register|token)/.test(path)) {
+      if (await refreshToken()) return api(path, opts, false);
+      signOut('Your session expired. Please sign in again.');
+    }
     let data = null;
     try { data = await res.json(); } catch (e) {}
     if (!res.ok) throw { status: res.status, data };
     return data;
+  }
+
+  let refreshing = null;
+  function refreshToken() {
+    // Share one refresh between parallel requests (refresh tokens rotate and are single-use).
+    refreshing = refreshing || (async () => {
+      try {
+        const res = await fetch(API_BASE + '/auth/token/refresh/', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: state.refresh }),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        saveTokens(data.access, data.refresh || state.refresh);
+        return true;
+      } catch (e) { return false; } finally { setTimeout(() => { refreshing = null; }, 0); }
+    })();
+    return refreshing;
+  }
+
+  function saveTokens(access, refresh) {
+    state.token = access; state.refresh = refresh;
+    store.set('token', access); store.set('refresh', refresh);
+  }
+
+  // Turns DRF error payloads ({"password": ["Too short."], ...}) into one readable line.
+  function errorText(err, fallback) {
+    const d = err && err.data;
+    if (!d) return fallback || (err && err.status ? `Server error (${err.status}). Try again in a moment.` : 'Something went wrong.');
+    if (typeof d === 'string') return d;
+    if (d.error || d.detail) return d.error || d.detail;
+    const parts = Object.entries(d).map(([k, v]) => {
+      const msg = [].concat(v).join(' ');
+      return k === 'non_field_errors' ? msg : `${k.replace(/_/g, ' ').replace(/2$/, ' confirmation')}: ${msg}`;
+    });
+    return parts.join(' ') || fallback || 'Something went wrong.';
+  }
+
+  let toastTimer;
+  function toast(msg, isError = false) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.toggle('error', isError);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
   }
 
   /* ---------------- AUTH ---------------- */
@@ -594,168 +792,250 @@ if(savedUser){
     });
   });
 
-  $('loginForm').addEventListener('submit', async (e) => {
+  async function withBusy(btn, label, fn) {
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = label;
+    try { return await fn(); } finally { btn.disabled = false; btn.textContent = original; }
+  }
+
+  $('loginForm').addEventListener('submit', (e) => {
     e.preventDefault();
     $('loginError').textContent = '';
-    try {
-      const data = await api('/auth/login/', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: $('loginEmail').value,
-          password: $('loginPassword').value,
-        }),
-      });
-      state.token = data.access;
-      localStorage.setItem("token", data.access);
-      state.user = { email: $('loginEmail').value };
-      localStorage.setItem(
-    "user",
-    JSON.stringify({ email: $('loginEmail').value })
-);
-      await enterApp();
-    } catch (err) {
-      $('loginError').textContent = 'Sign in failed. Check your email and password.';
-    }
+    withBusy(e.submitter || $('loginForm').querySelector('button'), 'Signing in…', async () => {
+      try {
+        const data = await api('/auth/login/', {
+          method: 'POST',
+          body: JSON.stringify({ email: $('loginEmail').value.trim(), password: $('loginPassword').value }),
+        });
+        saveTokens(data.access, data.refresh);
+        state.user = { email: $('loginEmail').value.trim() };
+        $('loginPassword').value = '';
+        await enterApp();
+      } catch (err) {
+        $('loginError').textContent = err.status === 401
+          ? 'Incorrect email or password.' : errorText(err, 'Sign in failed.');
+      }
+    });
   });
 
-  $('registerForm').addEventListener('submit', async (e) => {
+  $('registerForm').addEventListener('submit', (e) => {
     e.preventDefault();
     $('registerError').textContent = '';
     const pw = $('regPassword').value, pw2 = $('regPassword2').value;
     if (pw !== pw2) { $('registerError').textContent = 'Passwords do not match.'; return; }
-    try {
-      const data = await api('/auth/register/', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: $('regEmail').value,
-          username: $('regUsername').value,
-          full_name: $('regFullName').value,
-          password: pw, password2: pw2,
-        }),
-      });
-      state.token = data.tokens.access;
-      state.user = data.user;
-      await enterApp();
-    } catch (err) {
-      const msg = err.data ? JSON.stringify(err.data) : 'Registration failed.';
-      $('registerError').textContent = msg;
-    }
+    withBusy(e.submitter || $('registerForm').querySelector('button'), 'Creating account…', async () => {
+      try {
+        const data = await api('/auth/register/', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: $('regEmail').value.trim(),
+            username: $('regUsername').value.trim(),
+            full_name: $('regFullName').value.trim(),
+            password: pw, password2: pw2,
+          }),
+        });
+        saveTokens(data.tokens.access, data.tokens.refresh);
+        state.user = data.user;
+        $('registerForm').reset();
+        await enterApp();
+      } catch (err) {
+        $('registerError').textContent = errorText(err, 'Registration failed.');
+      }
+    });
   });
 
   $('logoutBtn').addEventListener('click', () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    
-    state.token = null; state.user = null; state.workspaces = []; state.activeWorkspace = null;
+    // Blacklist the refresh token server-side; sign out locally either way.
+    if (state.refresh) api('/auth/logout/', { method: 'POST', body: JSON.stringify({ refresh: state.refresh }) }).catch(() => {});
+    signOut();
+  });
+
+  function signOut(message) {
+    ['token', 'refresh', 'user', 'workspace'].forEach(k => store.remove(k));
+    clearTimeout(state.pollTimer);
+    Object.assign(state, { token: null, refresh: null, user: null, workspaces: [], activeWorkspace: null, role: null, conversationId: null });
+    document.body.classList.remove('nav-open');
     $('appView').classList.remove('active');
     $('authView').style.display = 'flex';
-  });
+    $('loginError').textContent = message || '';
+  }
 
   /* ---------------- ENTER APP ---------------- */
   async function enterApp() {
     $('authView').style.display = 'none';
     $('appView').classList.add('active');
-    $('userChip').textContent = state.user.email || '';
-    await loadWorkspaces();
-  }
-
-  async function loadWorkspaces() {
-    state.workspaces = await api('/workspaces/');
-    const sel = $('workspaceSelect');
-    sel.innerHTML = '';
-    if (state.workspaces.length === 0) {
-      sel.innerHTML = '<option>No workspaces yet</option>';
-      return;
+    try {
+      state.user = await api('/auth/profile/');
+    } catch (err) {
+      if (err.status === 401) return signOut('Your session expired. Please sign in again.');
     }
-    state.workspaces.forEach(w => {
-      const opt = document.createElement('option');
-      opt.value = w.id; opt.textContent = w.name;
-      sel.appendChild(opt);
-    });
-    state.activeWorkspace = state.workspaces[0].id;
-    sel.value = state.activeWorkspace;
-    await refreshAll();
+    store.set('user', state.user);
+    $('userChip').textContent = state.user ? (state.user.full_name || state.user.email) : '';
+    $('userChip').title = state.user ? state.user.email : '';
+    await loadWorkspaces(store.get('workspace'));
   }
 
-  $('workspaceSelect').addEventListener('change', async (e) => {
-    state.activeWorkspace = e.target.value;
-    await refreshAll();
-  });
+  async function loadWorkspaces(preferredId) {
+    try {
+      state.workspaces = await api('/workspaces/');
+      if (!state.workspaces.length) {
+        // First visit: give the user a workspace to start in right away.
+        await api('/workspaces/', { method: 'POST', body: JSON.stringify({ name: 'My Workspace' }) });
+        state.workspaces = await api('/workspaces/');
+      }
+    } catch (err) {
+      return toast(errorText(err, 'Could not load workspaces.'), true);
+    }
+    const sel = $('workspaceSelect');
+    sel.innerHTML = state.workspaces.map(w => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join('');
+    const ws = state.workspaces.find(w => String(w.id) === String(preferredId)) || state.workspaces[0];
+    sel.value = ws.id;
+    await selectWorkspace(ws.id);
+  }
+
+  async function selectWorkspace(id) {
+    const ws = state.workspaces.find(w => String(w.id) === String(id));
+    state.activeWorkspace = ws.id;
+    state.role = ws.my_role;
+    store.set('workspace', ws.id);
+    applyRole(ws);
+    newChat();
+    await Promise.all([loadDocuments(), loadMembers(), loadActivity(), loadConversations()].map(p => p.catch(err => toast(errorText(err), true))));
+  }
+
+  function applyRole(ws) {
+    const canEdit = state.role !== 'viewer';
+    const canManage = state.role === 'owner' || state.role === 'admin';
+    $('uploadPanel').hidden = !canEdit;
+    $('viewerNote').hidden = canEdit;
+    $('invitePanel').hidden = !canManage;
+    $('settingsPanel').hidden = !canManage;
+    $('deleteWsRow').hidden = state.role !== 'owner';
+    $('wsName').value = ws.name;
+  }
+
+  $('workspaceSelect').addEventListener('change', (e) => selectWorkspace(e.target.value));
 
   $('newWorkspaceBtn').addEventListener('click', async () => {
-    const name = prompt('Workspace name:');
+    const name = (prompt('Name for the new workspace:') || '').trim();
     if (!name) return;
-    await api('/workspaces/', { method: 'POST', body: JSON.stringify({ name }) });
-    await loadWorkspaces();
+    try {
+      const ws = await api('/workspaces/', { method: 'POST', body: JSON.stringify({ name }) });
+      await loadWorkspaces(ws.id);
+      toast(`Workspace “${name}” created.`);
+    } catch (err) { toast(errorText(err, 'Could not create workspace.'), true); }
   });
 
-  async function refreshAll() {
-    await Promise.all([loadDocuments(), loadMembers(), loadActivity()]);
-    clearChat();
-  }
-
   /* ---------------- NAVIGATION ---------------- */
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      item.classList.add('active');
-      $('view-' + item.dataset.view).classList.add('active');
-    });
+  function showView(name) {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.view === name));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
+    document.body.classList.remove('nav-open');
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => showView(item.dataset.view)));
+  $('menuBtn').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+  $('sidebarBackdrop').addEventListener('click', () => document.body.classList.remove('nav-open'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeDrawer(); document.body.classList.remove('nav-open'); }
   });
 
   /* ---------------- DOCUMENTS ---------------- */
-  $('docFile').addEventListener('change', () => {
-    const f = $('docFile').files[0];
-    $('uploadZoneText').textContent = f ? f.name : 'Click to choose a PDF, DOCX, or TXT file';
-  });
+  const ZONE_TEXT = 'Click or drop a PDF, DOCX, or TXT file here';
 
-  $('uploadBtn').addEventListener('click', async () => {
+  function setFile(file) {
+    const dt = new DataTransfer();
+    if (file) dt.items.add(file);
+    $('docFile').files = dt.files;
+    $('uploadZoneText').textContent = file ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB` : ZONE_TEXT;
+  }
+  $('docFile').addEventListener('change', () => setFile($('docFile').files[0]));
+  ['dragenter', 'dragover'].forEach(ev => $('uploadZone').addEventListener(ev, (e) => { e.preventDefault(); $('uploadZone').classList.add('drag'); }));
+  ['dragleave', 'drop'].forEach(ev => $('uploadZone').addEventListener(ev, () => $('uploadZone').classList.remove('drag')));
+  $('uploadZone').addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+
+  $('uploadBtn').addEventListener('click', () => {
     $('uploadError').textContent = '';
     const file = $('docFile').files[0];
-    const title = $('docTitle').value || (file ? file.name : '');
     if (!file) { $('uploadError').textContent = 'Choose a file first.'; return; }
-    if (!state.activeWorkspace) { $('uploadError').textContent = 'Create or select a workspace first (top right).'; return; }
+    if (!/\.(pdf|docx|txt)$/i.test(file.name)) { $('uploadError').textContent = 'Only PDF, DOCX, and TXT files are supported.'; return; }
+    if (file.size > MAX_UPLOAD_BYTES) { $('uploadError').textContent = 'File is larger than 10 MB.'; return; }
     const fd = new FormData();
-    fd.append('title', title);
+    fd.append('title', $('docTitle').value.trim() || file.name.replace(/\.[^.]+$/, ''));
     fd.append('file', file);
-    try {
-      await api(`/workspaces/${state.activeWorkspace}/documents/`, { method: 'POST', body: fd });
-      $('docTitle').value = '';
-      $('docFile').value = '';
-      $('uploadZoneText').textContent = 'Click to choose a PDF, DOCX, or TXT file';
-      await loadDocuments();
-      pollDocuments();
-    } catch (err) {
-      // Show the server's reason (e.g. "File size must not exceed 10MB.") instead of a generic guess.
-      const d = (err && err.data) || {};
-      const reason = [].concat(d.file || d.title || d.error || d.detail || []).join(' ');
-      $('uploadError').textContent = 'Upload failed: ' + (reason || `server error (${err && err.status || 'network'}). Try again in a moment.`);
-    }
+    withBusy($('uploadBtn'), 'Uploading…', async () => {
+      try {
+        await api(`/workspaces/${state.activeWorkspace}/documents/`, { method: 'POST', body: fd });
+        $('docTitle').value = '';
+        setFile(null);
+        toast('Uploaded — indexing in the background.');
+        await loadDocuments();
+      } catch (err) {
+        $('uploadError').textContent = 'Upload failed: ' + errorText(err);
+      }
+    });
   });
 
   async function loadDocuments() {
-    const docs = await api(`/workspaces/${state.activeWorkspace}/documents/`);
+    const ws = state.activeWorkspace;
+    const docs = await api(`/workspaces/${ws}/documents/`);
+    if (ws !== state.activeWorkspace) return docs;
+    state.docCount = docs.length;
     renderDocuments(docs);
+    renderChatEmpty();
+    // Keep refreshing while anything is still being indexed (large files can take minutes).
+    clearTimeout(state.pollTimer);
+    if (docs.some(d => d.status === 'pending' || d.status === 'processing')) {
+      state.pollTimer = setTimeout(() => loadDocuments().catch(() => {}), 4000);
+    }
     return docs;
   }
 
   function renderDocuments(docs) {
+    $('docCount').textContent = docs.length ? docs.length : '';
     const list = $('docList');
     if (!docs.length) { list.innerHTML = '<div class="empty">No documents uploaded yet.</div>'; return; }
+    const canEdit = state.role !== 'viewer';
     list.innerHTML = docs.map(d => `
       <div class="doc-row">
         <div class="doc-meta">
           <div class="doc-icon">${iconFor(d.file_type)}</div>
           <div>
             <div class="doc-name">${escapeHtml(d.title)}</div>
-            <div class="doc-sub mono">${d.file_type.toUpperCase()} · uploaded ${formatDate(d.created_at)}</div>
+            <div class="doc-sub mono">${d.file_type.toUpperCase()} · ${formatDate(d.created_at)}${d.uploaded_by_email ? ' · ' + escapeHtml(d.uploaded_by_email) : ''}</div>
+            ${d.status === 'failed' && d.error_message ? `<div class="doc-error">${escapeHtml(d.error_message)}</div>` : ''}
           </div>
         </div>
-        <span class="badge badge-${d.status}">${d.status}</span>
+        <div class="doc-actions">
+          <span class="badge badge-${d.status}">${d.status}</span>
+          ${canEdit && d.status !== 'completed' ? `<button class="btn-ghost sm" data-retry="${d.id}" title="Index this document again">Retry</button>` : ''}
+          ${canEdit ? `<button class="btn-ghost sm danger" data-delete="${d.id}" data-title="${escapeHtml(d.title)}">Delete</button>` : ''}
+        </div>
       </div>
     `).join('');
   }
+
+  $('docList').addEventListener('click', async (e) => {
+    const retry = e.target.closest('[data-retry]');
+    const del = e.target.closest('[data-delete]');
+    try {
+      if (retry) {
+        retry.disabled = true;
+        await api(`/workspaces/${state.activeWorkspace}/documents/${retry.dataset.retry}/reprocess/`, { method: 'POST' });
+        await loadDocuments();
+      } else if (del) {
+        if (!confirm(`Delete “${del.dataset.title}”? It will no longer be used to answer questions.`)) return;
+        del.disabled = true;
+        await api(`/workspaces/${state.activeWorkspace}/documents/${del.dataset.delete}/`, { method: 'DELETE' });
+        toast('Document deleted.');
+        await loadDocuments();
+      }
+    } catch (err) {
+      toast(errorText(err, 'Action failed.'), true);
+      if (retry) retry.disabled = false;
+      if (del) del.disabled = false;
+    }
+  });
 
   function iconFor(type) {
     if (type === 'pdf') return '◆';
@@ -763,122 +1043,267 @@ if(savedUser){
     return '▢';
   }
 
-  function pollDocuments(attempts = 10) {
-    if (attempts <= 0) return;
-    setTimeout(async () => {
-      const docs = await loadDocuments();
-      const stillPending = docs.some(d => d.status === 'pending' || d.status === 'processing');
-      if (stillPending) pollDocuments(attempts - 1);
-    }, 3000);
-  }
-
   /* ---------------- MEMBERS ---------------- */
-  $('inviteBtn').addEventListener('click', async () => {
+  $('inviteBtn').addEventListener('click', () => {
     $('inviteError').textContent = '';
-    const email = $('inviteEmail').value;
-    const role = $('inviteRole').value;
-    if (!email) return;
-    try {
-      await api(`/workspaces/${state.activeWorkspace}/members/add/`, {
-        method: 'POST', body: JSON.stringify({ email, role }),
-      });
-      $('inviteEmail').value = '';
-      await loadMembers();
-    } catch (err) {
-      const msg = (err.data && err.data.error) ? err.data.error : 'Could not add member.';
-      $('inviteError').textContent = msg;
-    }
+    const email = $('inviteEmail').value.trim();
+    if (!email) { $('inviteError').textContent = 'Enter an email address.'; return; }
+    withBusy($('inviteBtn'), 'Adding…', async () => {
+      try {
+        await api(`/workspaces/${state.activeWorkspace}/members/add/`, {
+          method: 'POST', body: JSON.stringify({ email, role: $('inviteRole').value }),
+        });
+        $('inviteEmail').value = '';
+        toast(`${email} added.`);
+        await loadMembers();
+      } catch (err) {
+        $('inviteError').textContent = err.status === 404
+          ? 'No RajMind account uses that email yet. Ask them to sign up first.'
+          : errorText(err, 'Could not add member.');
+      }
+    });
   });
 
   async function loadMembers() {
     const members = await api(`/workspaces/${state.activeWorkspace}/members/`);
+    $('memberCount').textContent = members.length || '';
     const list = $('memberList');
     if (!members.length) { list.innerHTML = '<div class="empty">No members yet.</div>'; return; }
+    const me = state.user && state.user.email;
+    const canRemove = (m) => m.role !== 'owner' && m.user_email !== me &&
+      (state.role === 'owner' || (state.role === 'admin' && m.role !== 'admin'));
     list.innerHTML = members.map(m => `
       <div class="member-row">
-        <div>
-          <div class="doc-name">${escapeHtml(m.user_full_name || m.user_email)}</div>
+        <div style="min-width:0">
+          <div class="doc-name">${escapeHtml(m.user_full_name || m.user_email)}${m.user_email === me ? ' <span class="hint">(you)</span>' : ''}</div>
           <div class="doc-sub">${escapeHtml(m.user_email)}</div>
         </div>
-        <span class="role-tag">${m.role}</span>
+        <div class="doc-actions">
+          <span class="role-tag">${m.role}</span>
+          ${canRemove(m) ? `<button class="btn-ghost sm danger" data-remove="${m.user_id}" data-email="${escapeHtml(m.user_email)}">Remove</button>` : ''}
+        </div>
       </div>
     `).join('');
   }
 
-  /* ---------------- ASK / CHAT ---------------- */
-  function clearChat() {
-    $('chatThread').innerHTML = '<div class="empty" id="chatEmpty">No questions yet — ask something about your uploaded documents.</div>';
+  $('memberList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-remove]');
+    if (!btn || !confirm(`Remove ${btn.dataset.email} from this workspace?`)) return;
+    try {
+      await api(`/workspaces/${state.activeWorkspace}/members/${btn.dataset.remove}/remove/`, { method: 'DELETE' });
+      toast('Member removed.');
+      await loadMembers();
+    } catch (err) { toast(errorText(err, 'Could not remove member.'), true); }
+  });
+
+  $('renameWsBtn').addEventListener('click', () => {
+    $('settingsError').textContent = '';
+    const name = $('wsName').value.trim();
+    if (!name) { $('settingsError').textContent = 'Name cannot be empty.'; return; }
+    withBusy($('renameWsBtn'), 'Saving…', async () => {
+      try {
+        await api(`/workspaces/${state.activeWorkspace}/`, { method: 'PATCH', body: JSON.stringify({ name }) });
+        toast('Workspace renamed.');
+        await loadWorkspaces(state.activeWorkspace);
+      } catch (err) { $('settingsError').textContent = errorText(err, 'Could not rename workspace.'); }
+    });
+  });
+
+  $('deleteWsBtn').addEventListener('click', async () => {
+    const ws = state.workspaces.find(w => w.id === state.activeWorkspace);
+    const typed = prompt(`This permanently deletes “${ws.name}” with all its documents and chats.\nType the workspace name to confirm:`);
+    if (typed === null) return;
+    if (typed.trim() !== ws.name) { $('settingsError').textContent = 'Name did not match — nothing was deleted.'; return; }
+    try {
+      await api(`/workspaces/${ws.id}/`, { method: 'DELETE' });
+      toast('Workspace deleted.');
+      showView('ask');
+      await loadWorkspaces();
+    } catch (err) { $('settingsError').textContent = errorText(err, 'Could not delete workspace.'); }
+  });
+
+  /* ---------------- CHAT HISTORY ---------------- */
+  async function loadConversations() {
+    const ws = state.activeWorkspace;
+    const convs = await api(`/workspaces/${ws}/chat/conversations/`);
+    if (ws !== state.activeWorkspace) return;
+    $('chatList').innerHTML = convs.length ? convs.map(c => `
+      <div class="chat-item ${c.id === state.conversationId ? 'active' : ''}" data-conv="${c.id}" title="${escapeHtml(c.title)}">
+        <span>${escapeHtml(c.title)}</span>
+        <button data-del-conv="${c.id}" aria-label="Delete chat">✕</button>
+      </div>
+    `).join('') : '<div class="hint" style="padding:0 12px">No chats yet.</div>';
   }
 
+  $('chatList').addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-del-conv]');
+    const item = e.target.closest('[data-conv]');
+    if (del) {
+      e.stopPropagation();
+      if (!confirm('Delete this chat?')) return;
+      try {
+        await api(`/workspaces/${state.activeWorkspace}/chat/conversations/${del.dataset.delConv}/`, { method: 'DELETE' });
+        if (Number(del.dataset.delConv) === state.conversationId) newChat();
+        await loadConversations();
+      } catch (err) { toast(errorText(err, 'Could not delete chat.'), true); }
+    } else if (item) {
+      openConversation(Number(item.dataset.conv));
+    }
+  });
+
+  async function openConversation(id) {
+    showView('ask');
+    try {
+      const conv = await api(`/workspaces/${state.activeWorkspace}/chat/conversations/${id}/`);
+      state.conversationId = conv.id;
+      $('chatThread').innerHTML = '';
+      conv.messages.forEach(m => appendMessage(m.role, m.content, m.sources || []));
+      highlightConversation();
+      scrollToBottom();
+    } catch (err) { toast(errorText(err, 'Could not open chat.'), true); }
+  }
+
+  function highlightConversation() {
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.toggle('active', Number(el.dataset.conv) === state.conversationId));
+  }
+
+  function newChat() {
+    state.conversationId = null;
+    $('chatThread').innerHTML = '';
+    renderChatEmpty();
+    highlightConversation();
+  }
+  $('newChatBtn').addEventListener('click', () => { newChat(); showView('ask'); $('askInput').focus(); });
+
+  /* ---------------- ASK / CHAT ---------------- */
+  function renderChatEmpty() {
+    const thread = $('chatThread');
+    if (thread.querySelector('.msg')) return;
+    thread.innerHTML = state.docCount
+      ? `<div class="empty">Ask anything about the ${state.docCount} document${state.docCount > 1 ? 's' : ''} in this workspace.
+           <div class="suggestions">
+             ${['Summarize the key points', 'What are the main policies or rules?', 'List any important dates or deadlines']
+               .map(s => `<button class="btn-ghost sm" data-suggest="${s}">${s}</button>`).join('')}
+           </div></div>`
+      : `<div class="empty">This workspace has no documents yet.<br>
+           <button class="btn-ghost sm" style="margin-top:12px" data-goto="documents">Upload a document to get started</button></div>`;
+  }
+
+  $('chatThread').addEventListener('click', (e) => {
+    const s = e.target.closest('[data-suggest]');
+    const g = e.target.closest('[data-goto]');
+    const chip = e.target.closest('.citation-chip');
+    const copy = e.target.closest('.copy-btn');
+    if (s) { $('askInput').value = s.dataset.suggest; sendQuestion(); }
+    if (g) showView(g.dataset.goto);
+    if (chip) openDrawer(sourceStore.get(chip.dataset.key), chip.dataset.idx);
+    if (copy) {
+      navigator.clipboard.writeText(copy.dataset.text ? decodeURIComponent(copy.dataset.text) : '')
+        .then(() => toast('Answer copied.'), () => toast('Copy failed.', true));
+    }
+  });
+
+  const askInput = $('askInput');
+  askInput.addEventListener('input', autoGrow);
+  askInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendQuestion(); }
+  });
   $('askBtn').addEventListener('click', sendQuestion);
-  $('askInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendQuestion(); });
+
+  function autoGrow() {
+    askInput.style.height = 'auto';
+    askInput.style.height = Math.min(askInput.scrollHeight, 160) + 'px';
+  }
 
   async function sendQuestion() {
-    const q = $('askInput').value.trim();
-    if (!q) return;
-    const empty = $('chatEmpty');
+    const q = askInput.value.trim();
+    if (!q || state.asking) return;
+    if (q.length > 1000) { toast('Questions can be at most 1000 characters.', true); return; }
+    const ws = state.activeWorkspace;
+    state.asking = true;
+    $('askBtn').disabled = true;
+    const empty = $('chatThread').querySelector('.empty');
     if (empty) empty.remove();
 
     appendMessage('user', q);
-    $('askInput').value = '';
-    const thinkingId = appendMessage('assistant', '…thinking, reading the stacks…', true);
+    askInput.value = '';
+    autoGrow();
+    const pending = appendMessage('assistant', null);
+    scrollToBottom();
 
     try {
-      const data = await api(`/workspaces/${state.activeWorkspace}/chat/ask/`, {
-        method: 'POST', body: JSON.stringify({ question: q }),
+      const data = await api(`/workspaces/${ws}/chat/ask/`, {
+        method: 'POST', body: JSON.stringify({ question: q, conversation_id: state.conversationId }),
       });
-      replaceMessage(thinkingId, data.answer, data.sources || []);
-      loadActivity();
+      if (ws !== state.activeWorkspace) return;
+      const isNew = state.conversationId !== data.conversation_id;
+      state.conversationId = data.conversation_id;
+      fillMessage(pending, data.answer, data.sources || []);
+      if (isNew) loadConversations().catch(() => {});
+      loadActivity().catch(() => {});
     } catch (err) {
       // e.g. "The AI is at its free usage limit for this minute..." from the server
-      const reason = err && err.data && (err.data.error || err.data.detail);
-      replaceMessage(thinkingId, reason || 'Something went wrong answering that question.', []);
+      pending.classList.add('msg-error');
+      fillMessage(pending, errorText(err, 'Something went wrong answering that question.'), [], true);
+    } finally {
+      state.asking = false;
+      $('askBtn').disabled = false;
+      scrollToBottom();
+      if (window.matchMedia('(pointer: fine)').matches) askInput.focus();
     }
   }
 
+  const sourceStore = new Map();
   let msgCounter = 0;
-  function appendMessage(role, text, isLoading=false) {
-    msgCounter += 1;
-    const id = 'msg-' + msgCounter;
+
+  function appendMessage(role, text, sources = []) {
     const wrap = document.createElement('div');
     wrap.className = `msg msg-${role}`;
-    wrap.id = id;
     wrap.innerHTML = `
       <div class="msg-label">${role === 'user' ? 'You' : 'RajMind'}</div>
-      <div class="msg-bubble">${escapeHtml(text)}</div>
+      <div class="msg-bubble"></div>
     `;
     $('chatThread').appendChild(wrap);
-    $('chatThread').scrollTop = $('chatThread').scrollHeight;
-    return id;
+    if (role === 'user') wrap.querySelector('.msg-bubble').innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+    else if (text === null) wrap.querySelector('.msg-bubble').innerHTML = '<span class="typing" aria-label="Thinking"><i></i><i></i><i></i></span>';
+    else fillMessage(wrap, text, sources);
+    return wrap;
   }
 
-  function replaceMessage(id, text, sources) {
-    const wrap = $(id);
-    let citationsHtml = '';
-    if (sources.length) {
-      citationsHtml = '<div class="citation-row">' + sources.map((s, i) => `
-        <div class="citation-chip" data-doc='${escapeAttr(JSON.stringify(s))}' data-idx="${i+1}">
-          <span class="num">${i+1}</span> ${escapeHtml(s.title)}
-        </div>
-      `).join('') + '</div>';
+  function fillMessage(wrap, text, sources, plain = false) {
+    const citations = sources.length ? '<div class="citation-row">' + sources.map((s, i) => {
+      const key = 'src-' + (++msgCounter);
+      sourceStore.set(key, s);
+      return `<button class="citation-chip" data-key="${key}" data-idx="${i + 1}" title="${escapeHtml(s.title)}"><span class="num">${i + 1}</span><span>${escapeHtml(s.title)}</span></button>`;
+    }).join('') + '</div>' : '';
+    wrap.querySelector('.msg-bubble').innerHTML = `<div class="md">${plain ? escapeHtml(text) : renderMarkdown(text)}</div>${citations}`;
+    if (!plain) {
+      wrap.querySelector('.msg-label').innerHTML = `RajMind <button class="copy-btn" data-text="${encodeURIComponent(text)}">Copy</button>`;
     }
-    wrap.querySelector('.msg-bubble').innerHTML = escapeHtml(text).replace(/\n/g, '<br>') + citationsHtml;
-    wrap.querySelectorAll('.citation-chip').forEach(chip => {
-      chip.addEventListener('click', () => openDrawer(JSON.parse(chip.dataset.doc), chip.dataset.idx));
-    });
+  }
+
+  function renderMarkdown(text) {
+    if (window.marked && window.DOMPurify) return DOMPurify.sanitize(marked.parse(text, { breaks: true }));
+    return escapeHtml(text).replace(/\n/g, '<br>');
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
   }
 
   /* ---------------- CITATION DRAWER ---------------- */
   function openDrawer(doc, idx) {
+    if (!doc) return;
+    const excerpts = doc.excerpts || [];
     $('drawerContent').innerHTML = `
       <div class="drawer-card">
         <div class="drawer-card-title"><span class="drawer-card-index">${idx}</span>${escapeHtml(doc.title)}</div>
-        <div class="drawer-card-meta">${doc.file_type.toUpperCase()} · document #${doc.document_id}</div>
+        <div class="drawer-card-meta">${escapeHtml((doc.file_type || '').toUpperCase())} · document #${doc.document_id}</div>
       </div>
-      <p style="font-size:13px; line-height:1.7; color:#5a4f3f;">
-        This answer drew on content from this document. Open the
-        Documents tab to review the full file or re-index it if it changes.
-      </p>
+      ${excerpts.length
+        ? `<div class="drawer-eyebrow">Passages used (${excerpts.length})</div>` +
+          excerpts.map(x => `<p class="excerpt">${escapeHtml(x)}${x.length >= 600 ? '…' : ''}</p>`).join('')
+        : `<p style="font-size:13px; line-height:1.7; color:#5a4f3f;">This answer drew on content from this document.</p>`}
     `;
     $('citationDrawer').classList.add('open');
     $('drawerBackdrop').classList.add('open');
@@ -892,10 +1317,12 @@ if(savedUser){
 
   /* ---------------- ACTIVITY ---------------- */
   async function loadActivity() {
-    const data = await api(`/workspaces/${state.activeWorkspace}/analytics/dashboard/`);
+    const ws = state.activeWorkspace;
+    const data = await api(`/workspaces/${ws}/analytics/dashboard/`);
+    if (ws !== state.activeWorkspace) return;
     const o = data.overview;
     $('statGrid').innerHTML = `
-      <div class="stat-card"><div class="stat-value">${o.total_documents}</div><div class="stat-label">Documents indexed</div></div>
+      <div class="stat-card"><div class="stat-value">${o.total_documents}</div><div class="stat-label">Documents</div></div>
       <div class="stat-card"><div class="stat-value">${o.total_searches}</div><div class="stat-label">Questions asked</div></div>
       <div class="stat-card"><div class="stat-value">${o.avg_response_time}s</div><div class="stat-label">Avg. response time</div></div>
       <div class="stat-card"><div class="stat-value">${o.searches_last_7_days}</div><div class="stat-label">Asked this week</div></div>
@@ -903,26 +1330,24 @@ if(savedUser){
     const rows = data.recent_searches || [];
     $('activityTable').innerHTML = rows.length ? rows.map(r => `
       <tr>
-        <td>${escapeHtml(r.query)}</td>
-        <td class="mono">${escapeHtml(r.user_email)}</td>
+        <td style="min-width:180px">${escapeHtml(r.query)}</td>
+        <td class="mono">${escapeHtml(r.user_email || '—')}</td>
         <td>${r.sources_count}</td>
         <td class="mono">${r.response_time.toFixed(2)}s</td>
+        <td class="mono" style="white-space:nowrap">${formatDate(r.created_at)}</td>
       </tr>
-    `).join('') : '<tr><td colspan="4" class="empty">No activity yet.</td></tr>';
+    `).join('') : '<tr><td colspan="5" class="empty">No activity yet.</td></tr>';
   }
 
   /* ---------------- UTIL ---------------- */
   function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
-  function escapeAttr(str) { return str.replace(/'/g, '&apos;'); }
   function formatDate(iso) {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
-if (state.token) {
-  enterApp();
-}
+
+  if (state.token) enterApp();
 })();
 </script>
 </body>

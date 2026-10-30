@@ -23,7 +23,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Conversation
-        fields = ['id', 'title', 'user_email', 'created_at']
+        fields = ['id', 'title', 'user_email', 'created_at', 'updated_at']
 
 
 class AskQuestionSerializer(serializers.Serializer):

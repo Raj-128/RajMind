@@ -9,10 +9,10 @@ class DocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
         fields = [
-            'id', 'title', 'file', 'file_type', 'status',
+            'id', 'title', 'file', 'file_type', 'status', 'error_message',
             'uploaded_by_email', 'workspace_name', 'created_at'
         ]
-        read_only_fields = ['status', 'file_type', 'uploaded_by_email', 'workspace_name', 'created_at']
+        read_only_fields = ['status', 'error_message', 'file_type', 'uploaded_by_email', 'workspace_name', 'created_at']
 
     def validate_file(self, value):
         allowed_extensions = ['pdf', 'docx', 'txt']

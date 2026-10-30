@@ -2,8 +2,9 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
-from .models import Workspace, WorkspaceMember
+from .models import Workspace, WorkspaceMember, get_role
 from .serializers import WorkspaceSerializer, WorkspaceMemberSerializer, AddMemberSerializer
 from accounts.models import User
 
@@ -22,6 +23,16 @@ class WorkspaceDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Workspace.objects.filter(members__user=self.request.user)
+
+    def perform_update(self, serializer):
+        if get_role(serializer.instance.id, self.request.user) not in ('owner', 'admin'):
+            raise PermissionDenied('Only the owner or an admin can rename this workspace.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.owner != self.request.user:
+            raise PermissionDenied('Only the owner can delete this workspace.')
+        instance.delete()
 
 
 class WorkspaceMemberListView(generics.ListAPIView):
@@ -76,6 +87,8 @@ class RemoveMemberView(APIView):
         member = get_object_or_404(WorkspaceMember, workspace=workspace, user__id=user_id)
         if member.role == 'owner':
             return Response({'error': 'Cannot remove owner.'}, status=status.HTTP_400_BAD_REQUEST)
+        if member.role == 'admin' and requester.role != 'owner':
+            return Response({'error': 'Only the owner can remove an admin.'}, status=status.HTTP_403_FORBIDDEN)
 
         member.delete()
         return Response({'message': 'Member removed.'}, status=status.HTTP_200_OK)

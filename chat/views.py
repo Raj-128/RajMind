@@ -33,10 +33,10 @@ class ConversationListCreateView(generics.ListCreateAPIView):
         return Conversation.objects.filter(
             workspace_id=workspace_id,
             user=self.request.user
-        ).order_by('-created_at')
+        ).order_by('-updated_at')
 
     def perform_create(self, serializer):
-        workspace = get_object_or_404(Workspace, id=self.kwargs['workspace_id'])
+        workspace = get_object_or_404(Workspace, id=self.kwargs['workspace_id'], members__user=self.request.user)
         serializer.save(user=self.request.user, workspace=workspace)
 
 
@@ -45,7 +45,7 @@ class ConversationDetailView(generics.RetrieveDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Conversation.objects.filter(user=self.request.user)
+        return Conversation.objects.filter(user=self.request.user, workspace_id=self.kwargs['workspace_id'])
 
 
 class AskQuestionView(APIView):
@@ -105,6 +105,11 @@ class AskQuestionView(APIView):
             else:
                 message = "The AI service is unavailable right now. Please try again shortly."
             return Response({'error': message}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception:
+            # e.g. the Groq fallback also failed; answer with a clear message, not a bare 500.
+            logger.exception("Answer generation failed")
+            return Response({'error': "The AI service is unavailable right now. Please try again shortly."},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
         elapsed_time = time.time() - start_time
 
         # Save assistant message
@@ -114,6 +119,7 @@ class AskQuestionView(APIView):
             content=result['answer'],
             sources=result['sources']
         )
+        conversation.save(update_fields=['updated_at'])  # bump to top of the history list
 
         # Log analytics
         SearchAnalytics.objects.create(

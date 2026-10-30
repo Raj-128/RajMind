@@ -14,9 +14,11 @@ CSRF_TRUSTED_ORIGINS = [
     [config('RENDER_EXTERNAL_URL', default='')] + config('CSRF_TRUSTED_ORIGINS', default='').split(',')
     if origin
 ]
-GEMINI_API_KEY = config('GEMINI_API_KEY')
-# Optional: if set, Groq answers questions whenever Gemini fails (quota, outage).
-GROQ_API_KEY = config('GROQ_API_KEY', default='')
+# Both accept one key or several comma-separated keys ("key1,key2"); when a key hits
+# its limit or stops working, the next one is used automatically.
+GEMINI_API_KEYS = [k.strip() for k in config('GEMINI_API_KEY').split(',') if k.strip()]
+# Optional: if set, Groq answers questions whenever all Gemini keys fail (quota, outage).
+GROQ_API_KEYS = [k.strip() for k in config('GROQ_API_KEY', default='').split(',') if k.strip()]
 
 # Print warnings/errors (incl. 500 tracebacks and Gemini->Groq switches) to the
 # console so they show up in Render's Logs tab; Django hides them when DEBUG is off.
@@ -99,6 +101,9 @@ DATABASES = {
         # Hosted Postgres (Neon, Render, Supabase) needs DB_SSLMODE=require.
         'OPTIONS': {'sslmode': config('DB_SSLMODE', default='prefer')},
     }
+} if config('DB_NAME', default='') else {
+    # No DB_NAME set: local SQLite file, handy for quick local runs and tests.
+    'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}
 }
 
 AUTH_PASSWORD_VALIDATORS = [

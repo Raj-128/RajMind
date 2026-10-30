@@ -1,22 +1,24 @@
 import logging
 
-from google import genai
 from google.genai import errors as genai_errors
 from django.conf import settings
-from rag.vector_store import search_similar_chunks
+from rag.vector_store import search_similar_chunks, gemini_call
 from documents.models import Document
 
 logger = logging.getLogger(__name__)
 
-client_genai = genai.Client(api_key=settings.GEMINI_API_KEY)
 # gemini-2.5-* models are no longer available to new API keys.
 CHAT_MODEL = "gemini-3.5-flash"
 GROQ_MODEL = "openai/gpt-oss-120b"  # backup when Gemini fails (needs GROQ_API_KEY)
+NO_ANSWER = "I couldn't generate an answer for that. Please try rephrasing your question."
 
 
 def generate_answer(workspace_id, question, conversation_history=None):
-    # Search relevant chunks
-    search_results = search_similar_chunks(workspace_id, question, n_results=5)
+    # Follow-ups like "tell me more" carry no topic of their own, so search with
+    # the previous question too.
+    previous = [m['content'] for m in (conversation_history or []) if m['role'] == 'user']
+    search_query = f"{previous[-1]}\n{question}" if previous else question
+    search_results = search_similar_chunks(workspace_id, search_query, n_results=5)
 
     if not search_results['documents'] or not search_results['documents'][0]:
         return {
@@ -24,29 +26,26 @@ def generate_answer(workspace_id, question, conversation_history=None):
             'sources': []
         }
 
-    # Build context from chunks
     chunks = search_results['documents'][0]
     metadatas = search_results['metadatas'][0]
 
+    # One source per document (in relevance order), with the passages used from it.
+    docs = Document.objects.in_bulk({int(m['document_id']) for m in metadatas})
+    sources_by_id = {}
     context = ""
-    source_doc_ids = set()
-
-    for i, chunk in enumerate(chunks):
-        context += f"\n[Source {i+1}]:\n{chunk}\n"
-        source_doc_ids.add(int(metadatas[i]['document_id']))
-
-    # Get source document titles
-    sources = []
-    for doc_id in source_doc_ids:
-        try:
-            doc = Document.objects.get(id=doc_id)
-            sources.append({
-                'document_id': doc_id,
-                'title': doc.title,
-                'file_type': doc.file_type
-            })
-        except Document.DoesNotExist:
-            pass
+    for chunk, meta in zip(chunks, metadatas):
+        doc = docs.get(int(meta['document_id']))
+        if not doc:
+            continue
+        context += f"\n[Source: {doc.title}]\n{chunk}\n"
+        source = sources_by_id.setdefault(doc.id, {
+            'document_id': doc.id,
+            'title': doc.title,
+            'file_type': doc.file_type,
+            'excerpts': [],
+        })
+        source['excerpts'].append(chunk[:600])
+    sources = list(sources_by_id.values())
 
     # Build conversation history string
     history_text = ""
@@ -69,8 +68,8 @@ User question: {question}
 Instructions:
 - Answer based only on the context provided
 - If the answer is not in the context, say so clearly
-- Be concise and helpful
-- Mention which sources you used
+- Be concise and helpful; use short paragraphs or bullet points
+- Mention which sources (by document title) you used
 
 Answer:"""
 
@@ -81,18 +80,26 @@ Answer:"""
 
 
 def _complete(prompt):
-    """Gemini first; if it fails (e.g. free per-minute limit) and GROQ_API_KEY is
-    set, Groq answers instead. Re-raises Gemini's error if there's no fallback."""
+    """Tries every Gemini key (switching when one is over its limit), then every Groq
+    key if GROQ_API_KEY is set. Re-raises the last error if nothing could answer."""
     try:
-        return client_genai.models.generate_content(model=CHAT_MODEL, contents=prompt).text
+        # retries=0: the user is waiting, so switch keys but never sleep for the quota.
+        # .text is None when Gemini returns no text (e.g. blocked by safety filters).
+        return gemini_call('generate_content', retries=0, model=CHAT_MODEL, contents=prompt).text or NO_ANSWER
     except genai_errors.APIError:
-        if not settings.GROQ_API_KEY:
+        if not settings.GROQ_API_KEYS:
             raise
         logger.warning("Gemini failed, answering with Groq instead", exc_info=True)
     from groq import Groq
-    completion = Groq(api_key=settings.GROQ_API_KEY).chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
-    return completion.choices[0].message.content
+    for i, key in enumerate(settings.GROQ_API_KEYS):
+        try:
+            completion = Groq(api_key=key).chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+            )
+            return completion.choices[0].message.content or NO_ANSWER
+        except Exception:
+            if i == len(settings.GROQ_API_KEYS) - 1:
+                raise
+            logger.warning("Groq key #%d failed, switching to the next key", i + 1, exc_info=True)

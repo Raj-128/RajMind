@@ -2,10 +2,11 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from .models import Document
 from .serializers import DocumentSerializer
-from workspaces.models import Workspace, WorkspaceMember
+from workspaces.models import Workspace, WorkspaceMember, get_role
 from rag.tasks import start_document_processing
 
 def get_workspace_or_403(workspace_id, user):
@@ -14,6 +15,12 @@ def get_workspace_or_403(workspace_id, user):
     if not is_member:
         return None, workspace
     return workspace, None
+
+
+def require_editor(workspace_id, user):
+    # Viewers can read and ask questions, but not add, remove or re-index documents.
+    if get_role(workspace_id, user) not in ('owner', 'admin', 'member'):
+        raise PermissionDenied('Viewers cannot change documents in this workspace.')
 
 
 class DocumentListCreateView(generics.ListCreateAPIView):
@@ -39,6 +46,7 @@ class DocumentListCreateView(generics.ListCreateAPIView):
         workspace, error = get_workspace_or_403(workspace_id, request.user)
         if not workspace:
             return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+        require_editor(workspace_id, request.user)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -57,3 +65,25 @@ class DocumentDetailView(generics.RetrieveDestroyAPIView):
         if not workspace:
             return Document.objects.none()
         return Document.objects.filter(workspace=workspace)
+
+    def perform_destroy(self, instance):
+        require_editor(instance.workspace_id, self.request.user)
+        instance.file.delete(save=False)  # remove the uploaded file from disk too
+        instance.delete()
+
+
+class DocumentReprocessView(APIView):
+    """Re-runs extraction + embedding, e.g. after a failure or a server restart mid-processing."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, workspace_id, pk):
+        workspace, _ = get_workspace_or_403(workspace_id, request.user)
+        if not workspace:
+            return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+        require_editor(workspace_id, request.user)
+        document = get_object_or_404(Document, id=pk, workspace=workspace)
+        document.status = 'pending'
+        document.error_message = ''
+        document.save(update_fields=['status', 'error_message', 'updated_at'])
+        start_document_processing(document.id)
+        return Response(DocumentSerializer(document).data)

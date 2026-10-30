@@ -22,6 +22,8 @@ class Document(models.Model):
     file = models.FileField(upload_to='documents/%Y/%m/%d/')
     file_type = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    # Why processing failed, shown to the user next to the 'failed' badge.
+    error_message = models.CharField(max_length=500, blank=True, default='')
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_documents')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

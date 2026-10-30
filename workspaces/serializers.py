@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Workspace, WorkspaceMember
+from .models import Workspace, WorkspaceMember, get_role
 from django.utils.text import slugify
 import uuid
 
@@ -7,14 +7,18 @@ import uuid
 class WorkspaceSerializer(serializers.ModelSerializer):
     owner_email = serializers.EmailField(source='owner.email', read_only=True)
     member_count = serializers.SerializerMethodField()
+    my_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Workspace
-        fields = ['id', 'name', 'slug', 'owner_email', 'member_count', 'created_at']
-        read_only_fields = ['slug', 'owner_email', 'member_count', 'created_at']
+        fields = ['id', 'name', 'slug', 'owner_email', 'member_count', 'my_role', 'created_at']
+        read_only_fields = ['slug', 'owner_email', 'member_count', 'my_role', 'created_at']
 
     def get_member_count(self, obj):
         return obj.members.count()
+
+    def get_my_role(self, obj):
+        return get_role(obj.id, self.context['request'].user)
 
     def create(self, validated_data):
         base_slug = slugify(validated_data['name'])
@@ -30,10 +34,11 @@ class WorkspaceSerializer(serializers.ModelSerializer):
 class WorkspaceMemberSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
 
     class Meta:
         model = WorkspaceMember
-        fields = ['id', 'user_email', 'user_full_name', 'role', 'joined_at']
+        fields = ['id', 'user_id', 'user_email', 'user_full_name', 'role', 'joined_at']
         read_only_fields = ['joined_at']
 
 

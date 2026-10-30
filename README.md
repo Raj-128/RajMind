@@ -18,95 +18,87 @@ RajMind solves this problem by transforming company documents into a searchable 
 
 ### Authentication & Security
 
-* JWT-based authentication
-* Custom user model
+* JWT authentication with silent access-token refresh and refresh-token blacklisting on sign out
+* Custom user model (email login)
 * Protected API endpoints
 
-### Multi-Tenant Workspace Management
+### Multi-Tenant Workspaces & RBAC
 
-* Create and manage independent workspaces
+* Create, rename and delete independent workspaces
 * Organization-level data isolation
-* Role-Based Access Control (RBAC)
+* Role-based access control enforced on the server:
 
-### Role Management
-
-* Owner
-* Admin
-* Member
-* Viewer
+| Role   | Ask questions | Upload / delete / re-index documents | Add / remove members | Rename workspace | Delete workspace |
+| ------ | :-----------: | :----------------------------------: | :------------------: | :--------------: | :--------------: |
+| Owner  | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Admin  | ✓ | ✓ | ✓ (not other admins) | ✓ | – |
+| Member | ✓ | ✓ | – | – | – |
+| Viewer | ✓ | – | – | – | – |
 
 ### Document Intelligence
 
-* Upload PDF, DOCX, and TXT files
-* Automated document processing pipeline
-* Text extraction and chunking
-* Vector embedding generation
+* Upload PDF, DOCX and TXT files (up to 10 MB) with drag & drop
+* Background pipeline: text extraction → chunking → Gemini embeddings
+* Live status (pending / processing / completed / failed) with the failure reason shown
+* One-click **Retry** for failed documents, and delete
 
 ### AI-Powered Knowledge Retrieval
 
-* Retrieval-Augmented Generation (RAG)
-* Semantic search using vector similarity
-* Context-aware AI responses
-* Source-backed answers with citations
+* Retrieval-Augmented Generation (RAG) with cosine-similarity vector search
+* Answers rendered as formatted Markdown
+* Citations for every answer, with the **exact passages** used shown in a side drawer
+* Follow-up questions understand the conversation's context
+* Multiple API keys with automatic switching when a key hits its limit, then fallback to Groq
 
-### Conversation Management
+### Conversations
 
-* Multi-turn conversations
-* Conversation history
-* Persistent chat sessions
+* Multi-turn chats saved per workspace
+* Chat history sidebar: reopen or delete past chats
+* Copy answer button, suggested starter questions
 
 ### Analytics Dashboard
 
-* Search activity monitoring
-* Usage insights
-* Workspace analytics
-* Response tracking
+* Documents, questions asked, average response time, weekly activity
+* Recent questions with who asked, sources used and response time
 
-### Background Processing
+### Responsive UI
 
-* Celery task queue
-* Redis message broker
-* Asynchronous document processing
-
-### Deployment Ready
-
-* Dockerized architecture
-* Environment-based configuration
-* Scalable service-oriented design
+* Works on desktop, tablet and phone (collapsible sidebar, touch-friendly inputs)
 
 ---
 
 ## Tech Stack
 
-| Layer            | Technology                                             |
-| ---------------- | ------------------------------------------------------ |
-| Backend          | Django, Django REST Framework                          |
-| Database         | PostgreSQL                                             |
-| Cache / Queue    | Redis                                                  |
-| Background Tasks | Celery                                                 |
-| Vector Database  | ChromaDB                                               |
-| AI / Embeddings  | Google Gemini (gemini-2.5-flash, gemini-embedding-001) |
-| Authentication   | JWT (SimpleJWT)                                        |
-| Containerization | Docker, Docker Compose                                 |
+| Layer            | Technology                                                        |
+| ---------------- | ----------------------------------------------------------------- |
+| Backend          | Django 6, Django REST Framework                                   |
+| Database         | PostgreSQL (SQLite fallback for local dev/tests)                  |
+| Vector Search    | Embeddings stored in PostgreSQL, cosine similarity with NumPy     |
+| AI / Embeddings  | Google Gemini (`gemini-3.5-flash`, `gemini-embedding-001`)        |
+| AI Fallback      | Groq (`openai/gpt-oss-120b`), optional                            |
+| Background Tasks | Background thread by default; Celery + Redis when configured      |
+| Authentication   | JWT (SimpleJWT)                                                   |
+| Frontend         | Single-page HTML/CSS/JS served by Django                          |
+| Deployment       | Docker, Docker Compose, Render / Railway (`start.sh`)             |
 
 ---
 
 ## Architecture
 
 ```text
-Client (Postman / Frontend)
+Browser (frontend.html, served at /)
         |
         v
-Django REST API (web)
+Django REST API (gunicorn)
         |
-   -----------------------------------
-   |          |          |           |
-   v          v          v           v
-PostgreSQL  Redis     ChromaDB    Celery Worker
-(database)  (broker)  (vectors)   (background tasks)
-                                       |
-                                       v
-                                  Google Gemini API
+   -------------------------------------------
+   |                    |                    |
+   v                    v                    v
+PostgreSQL        Document processing    Google Gemini API
+(data + vectors)  (thread or Celery)     (answers + embeddings)
+                                             |
+                                             v  on failure
+                                         Groq API (answers)
 ```
 
 ---
@@ -115,122 +107,130 @@ PostgreSQL  Redis     ChromaDB    Celery Worker
 
 ### Login & Authentication
 
-
 ![Login](screenshots/login.png)
-
 
 ### Workspace Dashboard
 
-
 ![Workspace](screenshots/workspace.png)
-
 
 ### Document Upload & Processing
 
-
 ![Documents](screenshots/documents.png)
-
 
 ### AI Knowledge Assistant
 
-
 ![Chat](screenshots/chat.png)
-
 
 ### Analytics Dashboard
 
-
 ![Analytics](screenshots/analytics.png)
-
 
 ---
 
 ## Setup
 
-### Prerequisites
+### Environment variables
 
-* Docker Desktop
-* Google Gemini API Key
+| Variable | Required | Description |
+| -------- | :------: | ----------- |
+| `SECRET_KEY` | ✓ | Django secret key |
+| `GEMINI_API_KEY` | ✓ | Google AI Studio key(s) for answers + embeddings. Several keys allowed, comma-separated |
+| `GROQ_API_KEY` | – | Groq key(s) for the answer fallback. Several keys allowed, comma-separated |
+| `DEBUG` | – | `True` for local development |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | – | PostgreSQL connection. If `DB_NAME` is unset, a local SQLite file is used |
+| `DB_SSLMODE` | – | `require` for hosted Postgres (Neon, Render, Supabase) |
+| `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | – | Use Celery + Redis instead of a background thread |
+| `CSRF_TRUSTED_ORIGINS` | – | Extra comma-separated origins (Render's URL is added automatically) |
 
-### Installation
+### API keys and automatic switching
 
-Clone the repository:
+Both key variables accept one key or a comma-separated list:
 
-```bash
-git clone <repository-url>
-cd enterprise-ai-knowledge-assistant
+```env
+GEMINI_API_KEY=key-from-account-1,key-from-account-2
+GROQ_API_KEY=groq-key-1,groq-key-2
 ```
 
-Create environment file:
+When a key exceeds its limit (HTTP 429) or is invalid/revoked, RajMind moves to the next key automatically and keeps using it until that one runs out too. Order of attempts for an answer:
+
+1. Each Gemini key in turn
+2. Each Groq key in turn (if set)
+3. If everything is exhausted, the user sees "try again in about a minute"
+
+Document indexing (embeddings) uses only Gemini keys — Groq has no embedding models. If every Gemini key is over its per-minute limit, indexing waits for the quota to reset and continues instead of failing. Each switch is logged ("Gemini key #1 failed ... switching") so you can see it in Render's Logs tab.
+
+> Note: free-tier limits are per Google Cloud **project**, so extra Gemini keys only add capacity when created in different projects/accounts.
+
+### Run locally (no Docker)
+
+```bash
+python -m venv venv
+venv\Scripts\activate          # Windows  (source venv/bin/activate on macOS/Linux)
+pip install -r requirements.txt
+cp .env.example .env           # then set SECRET_KEY and GEMINI_API_KEY
+python manage.py migrate
+python manage.py runserver
+```
+
+Open http://127.0.0.1:8000/
+
+### Run with Docker
 
 ```bash
 cp .env.example .env
-```
-
-Configure your environment variables and Gemini API Key.
-
-Build and start services:
-
-```bash
 docker-compose up --build
-```
-
-Run migrations:
-
-```bash
 docker-compose exec web python manage.py migrate
+docker-compose exec web python manage.py createsuperuser
 ```
 
-Create superuser:
+### Deploy (Render / Railway)
+
+Start command: `bash start.sh` (runs `collectstatic`, `migrate`, then gunicorn on `$PORT`).
+Point an uptime monitor at `/health/` to keep a free instance awake.
+
+### Tests
 
 ```bash
-docker-compose exec web python manage.py createsuperuser
+python manage.py test
 ```
 
 ---
 
 ## API Endpoints
 
-| Endpoint                                    | Method   | Description                 |
-| ------------------------------------------- | -------- | --------------------------- |
-| `/api/auth/register/`                       | POST     | Register a new user         |
-| `/api/auth/login/`                          | POST     | Login and obtain JWT tokens |
-| `/api/workspaces/`                          | GET/POST | Create or list workspaces   |
-| `/api/workspaces/{id}/members/add/`         | POST     | Add workspace member        |
-| `/api/workspaces/{id}/documents/`           | GET/POST | Upload and manage documents |
-| `/api/workspaces/{id}/chat/ask/`            | POST     | Ask AI-powered questions    |
-| `/api/workspaces/{id}/analytics/dashboard/` | GET      | Workspace analytics         |
+All endpoints except register/login/refresh need `Authorization: Bearer <access token>`.
 
----
-
-## Project Status
-
-Completed and verified end-to-end:
-
-* Authentication System
-* Multi-Tenant Architecture
-* RBAC Implementation
-* Document Ingestion Pipeline
-* Semantic Search
-* Vector Database Integration
-* Google Gemini Integration
-* AI Chat with Citations
-* Analytics Dashboard
-* Celery Background Processing
-* Redis Queue Management
-* Dockerized Deployment
-* Frontend Interface
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/auth/register/` | POST | Register a new user (returns tokens) |
+| `/api/auth/login/` | POST | Obtain access + refresh tokens |
+| `/api/auth/token/refresh/` | POST | Exchange a refresh token for a new access token |
+| `/api/auth/logout/` | POST | Blacklist a refresh token |
+| `/api/auth/profile/` | GET/PATCH | Current user's profile |
+| `/api/workspaces/` | GET/POST | List or create workspaces |
+| `/api/workspaces/{id}/` | GET/PATCH/DELETE | Workspace detail, rename (owner/admin), delete (owner) |
+| `/api/workspaces/{id}/members/` | GET | List members |
+| `/api/workspaces/{id}/members/add/` | POST | Add a member (owner/admin) |
+| `/api/workspaces/{id}/members/{user_id}/remove/` | DELETE | Remove a member (owner/admin) |
+| `/api/workspaces/{id}/documents/` | GET/POST | List or upload documents |
+| `/api/workspaces/{id}/documents/{doc_id}/` | GET/DELETE | Document detail or delete |
+| `/api/workspaces/{id}/documents/{doc_id}/reprocess/` | POST | Re-run indexing for a document |
+| `/api/workspaces/{id}/chat/ask/` | POST | Ask a question (`question`, optional `conversation_id`) |
+| `/api/workspaces/{id}/chat/conversations/` | GET/POST | List or create conversations |
+| `/api/workspaces/{id}/chat/conversations/{conv_id}/` | GET/DELETE | Conversation with messages, or delete |
+| `/api/workspaces/{id}/analytics/dashboard/` | GET | Workspace analytics |
+| `/api/workspaces/{id}/analytics/documents/` | GET | Document usage list |
+| `/health/` | GET | Uptime check |
 
 ---
 
 ## Future Improvements
 
-* Source snippet preview
-* Advanced analytics
-* Team collaboration features
-* Knowledge health scoring
+* pgvector for very large workspaces
+* Cloud file storage (S3) so uploaded files survive redeploys on free hosting
+* Email invitations for users without an account
 * Document summarization
-* Suggested AI prompts
+* Streaming answers
 
 ---
 

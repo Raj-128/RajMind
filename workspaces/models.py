@@ -31,3 +31,8 @@ class WorkspaceMember(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.workspace.name} ({self.role})"
+
+
+def get_role(workspace_id, user):
+    """The user's role in the workspace, or None if they are not a member."""
+    return WorkspaceMember.objects.filter(workspace_id=workspace_id, user=user).values_list('role', flat=True).first()
