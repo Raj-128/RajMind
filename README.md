@@ -72,7 +72,7 @@ This is **Retrieval-Augmented Generation (RAG)**: the AI never answers from gene
 * Answers rendered as formatted Markdown
 * Citations for every answer, with the **exact passages** used shown in a side drawer
 * Follow-up questions understand the conversation's context
-* Multiple API keys with automatic switching when a key hits its limit, then fallback to Groq
+* Fast answers via Groq, with automatic switching across multiple API keys and fallback to Gemini
 
 ### Conversations
 
@@ -99,7 +99,7 @@ This is **Retrieval-Augmented Generation (RAG)**: the AI never answers from gene
 | Database         | PostgreSQL (SQLite fallback for local dev/tests)                  |
 | Vector Search    | Embeddings stored in PostgreSQL, cosine similarity with NumPy     |
 | AI / Embeddings  | Google Gemini (`gemini-3.8-flash` with `gemini-3.5-flash` fallback, `gemini-embedding-001`)        |
-| AI Fallback      | Groq (`openai/gpt-oss-120b`), optional                            |
+| Fast answers     | Groq (`openai/gpt-oss-120b`), optional, tried first when set      |
 | Background Tasks | Background thread by default; Celery + Redis when configured      |
 | Authentication   | JWT (SimpleJWT)                                                   |
 | Frontend         | Single-page HTML/CSS/JS served by Django                          |
@@ -177,8 +177,8 @@ GROQ_API_KEY=groq-key-1,groq-key-2
 
 When a key exceeds its limit (HTTP 429) or is invalid/revoked, RajMind moves to the next key automatically and keeps using it until that one runs out too. Order of attempts for an answer:
 
-1. Each Gemini key in turn
-2. Each Groq key in turn (if set)
+1. Each Groq key in turn (if set) — Groq is the fastest, typically about 1 second
+2. Each Gemini model (`gemini-3.8-flash`, then `gemini-3.5-flash`) with each Gemini key
 3. If everything is exhausted, the user sees "try again in about a minute"
 
 Document indexing (embeddings) uses only Gemini keys — Groq has no embedding models. If every Gemini key is over its per-minute limit, indexing waits for the quota to reset and continues instead of failing. Each switch is logged ("Gemini key #1 failed ... switching") so you can see it in Render's Logs tab.

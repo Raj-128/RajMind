@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 # Newest first; the next model is tried if one is unavailable to the key (e.g. not
 # on its tier) or over its limit. gemini-2.5-* is closed to new API keys.
 CHAT_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash"]
-GROQ_MODEL = "openai/gpt-oss-120b"  # backup when Gemini fails (needs GROQ_API_KEY)
+_unavailable_models = set()  # filled at runtime; reset on each deploy/restart
+GROQ_MODEL = "openai/gpt-oss-120b"  # answers first when GROQ_API_KEY is set (fastest)
 # Gemini 3.x "thinks" before answering (medium by default), which adds seconds per
 # answer. Retrieval already supplies the facts, so low thinking is enough.
 FAST_ANSWERS = genai_types.GenerateContentConfig(
@@ -88,28 +89,33 @@ Answer:"""
 
 
 def _complete(prompt):
-    """Tries each Gemini model with every Gemini key (switching when one is over its
-    limit), then every Groq key if GROQ_API_KEY is set. Re-raises the last error if
+    """Groq first (typically ~1s, vs several seconds for Gemini), trying every Groq
+    key; then each Gemini model with every Gemini key. Re-raises the last error if
     nothing could answer."""
-    for model in CHAT_MODELS:
-        try:
-            # retries=0: the user is waiting, so switch keys but never sleep for the quota.
-            # .text is None when Gemini returns no text (e.g. blocked by safety filters).
-            return gemini_call('generate_content', retries=0, model=model, contents=prompt, config=FAST_ANSWERS).text or NO_ANSWER
-        except genai_errors.APIError:
-            if model == CHAT_MODELS[-1] and not settings.GROQ_API_KEYS:
-                raise
-            logger.warning("Gemini model %s failed, trying the next option", model, exc_info=True)
     from groq import Groq
     for i, key in enumerate(settings.GROQ_API_KEYS):
         try:
-            completion = Groq(api_key=key).chat.completions.create(
+            # max_retries=0: on a rate limit, move to the next key/provider instead of
+            # waiting and retrying while the user waits.
+            completion = Groq(api_key=key, max_retries=0, timeout=30).chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
             )
             return completion.choices[0].message.content or NO_ANSWER
         except Exception:
-            if i == len(settings.GROQ_API_KEYS) - 1:
+            logger.warning("Groq key #%d failed, trying the next option", i + 1, exc_info=True)
+
+    available = [m for m in CHAT_MODELS if m not in _unavailable_models] or CHAT_MODELS
+    for model in available:
+        try:
+            # retries=0: the user is waiting, so switch keys but never sleep for the quota.
+            # .text is None when Gemini returns no text (e.g. blocked by safety filters).
+            return gemini_call('generate_content', retries=0, model=model, contents=prompt, config=FAST_ANSWERS).text or NO_ANSWER
+        except genai_errors.APIError as e:
+            if e.code in (400, 404):
+                # Model not offered to these keys: stop trying it first on every question.
+                _unavailable_models.add(model)
+            if model == available[-1]:
                 raise
-            logger.warning("Groq key #%d failed, switching to the next key", i + 1, exc_info=True)
+            logger.warning("Gemini model %s failed, trying the next option", model, exc_info=True)
