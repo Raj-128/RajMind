@@ -1,6 +1,6 @@
 import logging
 
-from google.genai import errors as genai_errors
+from google.genai import errors as genai_errors, types as genai_types
 from django.conf import settings
 from rag.vector_store import search_similar_chunks, gemini_call
 from documents.models import Document
@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 # on its tier) or over its limit. gemini-2.5-* is closed to new API keys.
 CHAT_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash"]
 GROQ_MODEL = "openai/gpt-oss-120b"  # backup when Gemini fails (needs GROQ_API_KEY)
+# Gemini 3.x "thinks" before answering (medium by default), which adds seconds per
+# answer. Retrieval already supplies the facts, so low thinking is enough.
+FAST_ANSWERS = genai_types.GenerateContentConfig(
+    thinking_config=genai_types.ThinkingConfig(thinking_level='low'),
+)
 NO_ANSWER = "I couldn't generate an answer for that. Please try rephrasing your question."
 
 
@@ -88,7 +93,7 @@ def _complete(prompt):
         try:
             # retries=0: the user is waiting, so switch keys but never sleep for the quota.
             # .text is None when Gemini returns no text (e.g. blocked by safety filters).
-            return gemini_call('generate_content', retries=0, model=model, contents=prompt).text or NO_ANSWER
+            return gemini_call('generate_content', retries=0, model=model, contents=prompt, config=FAST_ANSWERS).text or NO_ANSWER
         except genai_errors.APIError:
             if model == CHAT_MODELS[-1] and not settings.GROQ_API_KEYS:
                 raise
