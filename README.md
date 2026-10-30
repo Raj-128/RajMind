@@ -98,7 +98,7 @@ This is **Retrieval-Augmented Generation (RAG)**: the AI never answers from gene
 | Backend          | Django 6, Django REST Framework                                   |
 | Database         | PostgreSQL (SQLite fallback for local dev/tests)                  |
 | Vector Search    | Embeddings stored in PostgreSQL, cosine similarity with NumPy     |
-| AI / Embeddings  | Google Gemini (`gemini-3.5-flash`, `gemini-embedding-001`)        |
+| AI / Embeddings  | Google Gemini (`gemini-3.8-flash` with `gemini-3.5-flash` fallback, `gemini-embedding-001`)        |
 | AI Fallback      | Groq (`openai/gpt-oss-120b`), optional                            |
 | Background Tasks | Background thread by default; Celery + Redis when configured      |
 | Authentication   | JWT (SimpleJWT)                                                   |
