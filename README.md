@@ -30,7 +30,7 @@ Upload ──► Extract text ──► Split into chunks ──► Gemini embed
                                                                               │
 Question ──► Gemini embedding ──► cosine similarity search ──► top 5 chunks ◄──┘
                                                                    │
-                                     Gemini (or Groq fallback) writes the answer
+                                     Groq (or Gemini fallback) writes the answer
                                      from those chunks only, with citations
 ```
 
@@ -118,11 +118,11 @@ Django REST API (gunicorn)
    -------------------------------------------
    |                    |                    |
    v                    v                    v
-PostgreSQL        Document processing    Google Gemini API
-(data + vectors)  (thread or Celery)     (answers + embeddings)
-                                             |
-                                             v  on failure
-                                         Groq API (answers)
+PostgreSQL        Document processing    Groq API (answers, tried first)
+(data + vectors)  (thread or Celery)            |
+                                                v  on failure
+                                         Google Gemini API
+                                         (answer fallback + embeddings)
 ```
 
 ---
@@ -159,7 +159,7 @@ PostgreSQL        Document processing    Google Gemini API
 | -------- | :------: | ----------- |
 | `SECRET_KEY` | ✓ | Django secret key |
 | `GEMINI_API_KEY` | ✓ | Google AI Studio key(s) for answers + embeddings. Several keys allowed, comma-separated |
-| `GROQ_API_KEY` | – | Groq key(s) for the answer fallback. Several keys allowed, comma-separated |
+| `GROQ_API_KEY` | – | Groq key(s). When set, Groq answers first (fastest). Several keys allowed, comma-separated |
 | `DEBUG` | – | `True` for local development |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | – | PostgreSQL connection. If `DB_NAME` is unset, a local SQLite file is used |
 | `DB_SSLMODE` | – | `require` for hosted Postgres (Neon, Render, Supabase) |
