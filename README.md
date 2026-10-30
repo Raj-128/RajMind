@@ -14,6 +14,30 @@ RajMind solves this problem by transforming company documents into a searchable 
 
 ---
 
+## What It Does
+
+1. **Upload** company documents (PDF, DOCX, TXT) into a workspace.
+2. **Ask** a question in plain English, e.g. *"How many sick leaves do I get?"*
+3. **Get an answer** written only from your documents, e.g. *"Employees get 12 sick days per year…"*
+4. **See the proof**: every answer cites the source document, and one click shows the exact passages used.
+
+Teams get separate workspaces (HR, Engineering, Sales) with their own documents, members and roles, so data never mixes between them.
+
+## How It Works
+
+```text
+Upload ──► Extract text ──► Split into chunks ──► Gemini embeddings ──► stored in PostgreSQL
+                                                                              │
+Question ──► Gemini embedding ──► cosine similarity search ──► top 5 chunks ◄──┘
+                                                                   │
+                                     Gemini (or Groq fallback) writes the answer
+                                     from those chunks only, with citations
+```
+
+This is **Retrieval-Augmented Generation (RAG)**: the AI never answers from general knowledge. It answers only from the passages retrieved from your documents, which keeps answers grounded and traceable.
+
+---
+
 ## Key Features
 
 ### Authentication & Security
