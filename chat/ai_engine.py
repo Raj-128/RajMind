@@ -28,7 +28,9 @@ def generate_answer(workspace_id, question, conversation_history=None):
 
     if not search_results['documents'] or not search_results['documents'][0]:
         return {
-            'answer': 'I could not find relevant information in the knowledge base to answer your question.',
+            # Search only comes back empty when nothing in the workspace is indexed yet.
+            'answer': 'This workspace has no indexed documents yet. Upload a document in the '
+                      'Documents tab and wait until it shows "completed", then ask again.',
             'sources': []
         }
 

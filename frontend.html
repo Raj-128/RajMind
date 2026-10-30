@@ -321,7 +321,7 @@
     display:flex; gap:10px; align-items:flex-end; position:sticky; bottom:0;
     background: var(--ink); padding:12px 0 16px; padding-bottom:max(16px, env(safe-area-inset-bottom));
   }
-  .ask-bar textarea{ flex:1; resize:none; max-height:160px; line-height:1.5; }
+  .ask-bar textarea{ flex:1; resize:none; max-height:160px; line-height:1.5; overflow-y:hidden; }
 
   .empty{ text-align:center; color: var(--muted); font-size:13px; padding:40px 0; line-height:1.6; }
   .suggestions{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:16px; }
@@ -762,7 +762,10 @@
   // Turns DRF error payloads ({"password": ["Too short."], ...}) into one readable line.
   function errorText(err, fallback) {
     const d = err && err.data;
-    if (!d) return fallback || (err && err.status ? `Server error (${err.status}). Try again in a moment.` : 'Something went wrong.');
+    // No JSON body: usually the server restarting (deploy) or a timeout on the host.
+    if (!d) return err && err.status
+      ? `The server didn't respond properly (error ${err.status}). It may be restarting, so please try again in a minute.`
+      : (fallback || 'Something went wrong.');
     if (typeof d === 'string') return d;
     if (d.error || d.detail) return d.error || d.detail;
     const parts = Object.entries(d).map(([k, v]) => {
@@ -1213,6 +1216,7 @@
   function autoGrow() {
     askInput.style.height = 'auto';
     askInput.style.height = Math.min(askInput.scrollHeight, 160) + 'px';
+    askInput.style.overflowY = askInput.scrollHeight > 160 ? 'auto' : 'hidden';
   }
 
   async function sendQuestion() {
